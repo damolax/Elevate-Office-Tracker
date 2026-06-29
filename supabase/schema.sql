@@ -410,3 +410,76 @@ insert into storage.buckets (id, name, public) values ('attachments', 'attachmen
 --   status = 'director', week_number = 12
 --   WHERE email = 'YOUR_ADMIN_EMAIL_HERE';
 -- =============================================
+
+-- =============================================
+-- WEEK TRACKING SYSTEM
+-- =============================================
+
+-- Weekly assessment submissions
+create table if not exists week_assessments (
+  id uuid primary key default uuid_generate_v4(),
+  user_id uuid not null references profiles(id) on delete cascade,
+  week_number integer not null check (week_number between 1 and 12),
+  submitted boolean not null default false,
+  submitted_at timestamptz,
+  graded boolean not null default false,
+  graded_at timestamptz,
+  graded_by uuid references profiles(id),
+  grade text,                          -- pass / fail / excellent
+  admin_notes text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique(user_id, week_number)
+);
+
+alter table week_assessments enable row level security;
+
+create policy "Users view own assessments" on week_assessments
+  for select using (user_id = auth.uid());
+
+create policy "Admins manage all assessments" on week_assessments
+  for all using (is_admin_or_director());
+
+create policy "SM view team assessments" on week_assessments
+  for select using (is_sm_or_above());
+
+-- Week advancement log (tracks who advanced, who repeated, pardons)
+create table if not exists week_advancement_log (
+  id uuid primary key default uuid_generate_v4(),
+  user_id uuid not null references profiles(id) on delete cascade,
+  from_week integer not null,
+  to_week integer not null,
+  action text not null,               -- 'advanced' | 'repeated' | 'pardoned'
+  attendance_days integer not null default 0,
+  assessment_submitted boolean not null default false,
+  assessment_graded boolean not null default false,
+  admin_notes text,
+  actioned_by uuid references profiles(id),
+  created_at timestamptz not null default now()
+);
+
+alter table week_advancement_log enable row level security;
+
+create policy "Users view own advancement log" on week_advancement_log
+  for select using (user_id = auth.uid());
+
+create policy "Admins manage advancement log" on week_advancement_log
+  for all using (is_admin_or_director());
+
+-- Absence email log (tracks which emails were sent to avoid duplicates)
+create table if not exists absence_emails (
+  id uuid primary key default uuid_generate_v4(),
+  user_id uuid not null references profiles(id) on delete cascade,
+  email_type text not null,           -- 'daily_miss' | 'weekly_summary'
+  sent_at timestamptz not null default now(),
+  date_missed date,                   -- for daily miss
+  week_number integer,                -- for weekly summary
+  miss_count integer,                 -- how many days missed that week
+  delivered boolean not null default true,
+  unique(user_id, email_type, date_missed)
+);
+
+alter table absence_emails enable row level security;
+
+create policy "Admins manage absence emails" on absence_emails
+  for all using (is_admin_or_director());

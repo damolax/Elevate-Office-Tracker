@@ -28,6 +28,7 @@ export default function Sidebar({ profile }: { profile: Profile }) {
   const navItems: NavItem[] = [
     { href: '/dashboard', label: 'Dashboard', icon: <LayoutDashboard size={18} /> },
     { href: '/attendance', label: 'Attendance', icon: <QrCode size={18} /> },
+    { href: '/weeks', label: '12-Week Program', icon: <GraduationCap size={18} /> },
     { href: '/team', label: 'My Team', icon: <Users size={18} /> },
     { href: '/group', label: 'My Group', icon: <Group size={18} />, smOnly: true },
     { href: '/people', label: 'People', icon: <UserCheck size={18} />, adminOnly: true },
