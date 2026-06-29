@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard, Users, UserCheck, DollarSign, Search,
-  Calendar, MessageSquare, Settings, QrCode, Group, LogOut, ChevronRight, Flag
+  Calendar, MessageSquare, Settings, QrCode, Group, LogOut, ChevronRight, Flag, GraduationCap
 } from 'lucide-react'
 import type { Profile } from '@/lib/types'
 import { isSmOrAbove, getStatusLabel } from '@/lib/utils'
