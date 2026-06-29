@@ -13,6 +13,7 @@ const STATUSES: { value: UserStatus; label: string }[] = [
   { value: 'manager', label: 'Manager' },
   { value: 'senior_manager', label: 'Senior Manager' },
   { value: 'executive_manager', label: 'Executive Manager' },
+  { value: 'director', label: 'Director' },
 ]
 
 export default function SignupPage() {
@@ -40,8 +41,8 @@ export default function SignupPage() {
 
   useEffect(() => {
     const supabase = createClient()
-    supabase.from('color_groups').select('*').then(({ data }) => {
-      if (data) setColorGroups(data)
+    supabase.from('color_groups').select('id, name, hex_color').order('name').then(({ data }) => {
+      if (data) setColorGroups(data as ColorGroup[])
     })
   }, [])
 
@@ -59,29 +60,19 @@ export default function SignupPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (form.password !== form.confirm_password) {
-      setError('Passwords do not match')
-      return
-    }
-    if (form.password.length < 8) {
-      setError('Password must be at least 8 characters')
-      return
-    }
+    if (form.password !== form.confirm_password) { setError('Passwords do not match'); return }
+    if (form.password.length < 8) { setError('Password must be at least 8 characters'); return }
     setLoading(true)
     setError('')
 
     try {
       const supabase = createClient()
-
-      // Create auth user
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: form.email,
         password: form.password,
       })
-
       if (authError || !authData.user) throw new Error(authError?.message ?? 'Signup failed')
 
-      // Create profile
       const { error: profileError } = await supabase.from('profiles').insert({
         id: authData.user.id,
         full_name: form.full_name.trim(),
@@ -96,17 +87,13 @@ export default function SignupPage() {
         approved: false,
         week_number: 1,
       })
-
       if (profileError) throw new Error(profileError.message)
-
       router.push('/pending-approval')
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Something went wrong')
       setLoading(false)
     }
   }
-
-  const needsColor = ['senior_manager', 'executive_manager'].includes(form.status)
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-brand-900 to-brand-700 flex items-center justify-center p-4">
@@ -119,13 +106,9 @@ export default function SignupPage() {
           <p className="text-white/60 text-sm mt-1">Step {step} of 3</p>
         </div>
 
-        {/* Progress */}
         <div className="flex gap-2 mb-6">
           {[1,2,3].map(s => (
-            <div
-              key={s}
-              className={`flex-1 h-1.5 rounded-full transition-colors ${s <= step ? 'bg-white' : 'bg-white/30'}`}
-            />
+            <div key={s} className={`flex-1 h-1.5 rounded-full transition-colors ${s <= step ? 'bg-white' : 'bg-white/30'}`} />
           ))}
         </div>
 
@@ -166,20 +149,15 @@ export default function SignupPage() {
 
                 <div>
                   <label className="label">Your Status *</label>
-                  <select
-                    className="input"
-                    value={form.status}
-                    onChange={e => setForm(f => ({ ...f, status: e.target.value as UserStatus }))}
-                  >
+                  <select className="input" value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value as UserStatus }))}>
                     {STATUSES.map(s => (
                       <option key={s.value} value={s.value}>{s.label}</option>
                     ))}
                   </select>
                 </div>
 
-                {/* Color group */}
                 <div>
-                  <label className="label">Color Group *</label>
+                  <label className="label">Color Group</label>
                   <div className="flex items-start gap-3 mb-3">
                     <input
                       type="checkbox"
@@ -189,7 +167,7 @@ export default function SignupPage() {
                       className="mt-1"
                     />
                     <label htmlFor="no-color" className="text-sm text-gray-600 cursor-pointer">
-                      I don&apos;t have a color group yet — assign me to the smallest group
+                      I don&apos;t have a color group yet
                     </label>
                   </div>
 
@@ -208,7 +186,6 @@ export default function SignupPage() {
                         >
                           <div className="w-4 h-4 rounded-full flex-shrink-0" style={{ backgroundColor: g.hex_color }} />
                           {g.name}
-                          <span className="ml-auto text-xs text-gray-400">{g.member_count}</span>
                         </button>
                       ))}
                     </div>
@@ -223,12 +200,7 @@ export default function SignupPage() {
                       { value: false, label: 'I just started coming to the office this month' },
                     ].map(opt => (
                       <label key={String(opt.value)} className="flex items-center gap-3 p-3 rounded-lg border border-gray-200 cursor-pointer hover:bg-gray-50">
-                        <input
-                          type="radio"
-                          name="office"
-                          checked={form.is_office_already === opt.value}
-                          onChange={() => setForm(f => ({ ...f, is_office_already: opt.value }))}
-                        />
+                        <input type="radio" name="office" checked={form.is_office_already === opt.value} onChange={() => setForm(f => ({ ...f, is_office_already: opt.value }))} />
                         <span className="text-sm">{opt.label}</span>
                       </label>
                     ))}
@@ -244,7 +216,6 @@ export default function SignupPage() {
                 <p className="text-sm text-gray-500 mb-4">
                   Search for your sponsor by name or ID. Your sponsor is the person who brought you in.
                 </p>
-
                 <div>
                   <label className="label">Sponsor Name or ID</label>
                   <input
@@ -256,7 +227,6 @@ export default function SignupPage() {
                     }}
                     placeholder="Search by name or ID…"
                   />
-
                   {sponsorOptions.length > 0 && (
                     <div className="mt-1 border border-gray-200 rounded-lg overflow-hidden shadow-sm">
                       {sponsorOptions.map(s => (
@@ -275,32 +245,20 @@ export default function SignupPage() {
                       ))}
                     </div>
                   )}
-
-                  {form.sponsor_id && (
-                    <p className="text-green-600 text-xs mt-1.5 font-medium">✓ Sponsor selected</p>
-                  )}
+                  {form.sponsor_id && <p className="text-green-600 text-xs mt-1.5 font-medium">✓ Sponsor selected</p>}
                 </div>
 
                 {error && (
-                  <div className="bg-red-50 text-red-700 border border-red-200 rounded-lg px-4 py-3 text-sm">
-                    {error}
-                  </div>
+                  <div className="bg-red-50 text-red-700 border border-red-200 rounded-lg px-4 py-3 text-sm">{error}</div>
                 )}
               </div>
             )}
 
-            {/* Navigation */}
             <div className="flex gap-3 mt-6">
               {step > 1 && (
-                <button type="button" onClick={() => setStep(s => s - 1)} className="btn-secondary flex-1">
-                  Back
-                </button>
+                <button type="button" onClick={() => setStep(s => s - 1)} className="btn-secondary flex-1">Back</button>
               )}
-              <button
-                type="submit"
-                className="btn-primary flex-1 py-3"
-                disabled={loading}
-              >
+              <button type="submit" className="btn-primary flex-1 py-3" disabled={loading}>
                 {step < 3 ? 'Continue' : loading ? 'Creating Account…' : 'Create Account'}
               </button>
             </div>
