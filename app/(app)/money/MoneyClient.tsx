@@ -1,84 +1,104 @@
 'use client'
 
 import { useState, useMemo } from 'react'
-import { format, startOfWeek, endOfWeek } from 'date-fns'
+import { format, startOfWeek, endOfWeek, parseISO, startOfMonth, endOfMonth } from 'date-fns'
 import { createClient } from '@/lib/supabase/client'
 import type { Profile, ColorGroup, WeeklyEarning } from '@/lib/types'
-import { formatCurrency, getStatusLabel, getStatusColor, getWeekBounds, getWeekLabel } from '@/lib/utils'
+import { formatCurrency, getStatusLabel, getStatusColor } from '@/lib/utils'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts'
 
+type EarningView = 'weekly' | 'monthly'
+
 export default function MoneyClient({
-  profile, isAdmin, myEarnings, allEarnings, colorGroups, allProfiles,
+  profile, isAdmin, isEmOrBelow, myWeeklyEarnings, allEarnings, colorGroups, allProfiles,
 }: {
-  profile: Profile
-  isAdmin: boolean
-  myEarnings: WeeklyEarning[]
-  allEarnings: (WeeklyEarning & { profiles: { id: string; full_name: string; member_id: string; status: string; color_groups: { name: string; hex_color: string; code: string } } })[]
-  colorGroups: ColorGroup[]
-  allProfiles: Profile[]
+  profile: Profile; isAdmin: boolean; isEmOrBelow: boolean
+  myWeeklyEarnings: WeeklyEarning[]
+  allEarnings: any[]; colorGroups: ColorGroup[]; allProfiles: any[]
 }) {
   const [tab, setTab] = useState<'me' | 'leaderboard' | 'groups' | 'record'>('me')
+  const [earningView, setEarningView] = useState<EarningView>('monthly')
   const [recordForm, setRecordForm] = useState({
-    user_id: '',
-    week_start: format(startOfWeek(new Date(), { weekStartsOn: 6 }), 'yyyy-MM-dd'),
-    amount: '',
-    notes: '',
+    user_id: '', date: format(new Date(), 'yyyy-MM-dd'), amount: '', notes: '',
   })
   const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const [loading, setLoading] = useState(false)
   const [statusFilter, setStatusFilter] = useState('all')
   const [groupFilter, setGroupFilter] = useState('all')
+  const [monthFilter, setMonthFilter] = useState(format(new Date(), 'yyyy-MM'))
 
-  const myTotal = myEarnings.reduce((s, e) => s + Number(e.amount_usd), 0)
+  // My monthly earnings aggregation
+  const myMonthlyEarnings = useMemo(() => {
+    const map = new Map<string, number>()
+    for (const e of myWeeklyEarnings) {
+      const monthStr = e.week_start.slice(0, 7)
+      map.set(monthStr, (map.get(monthStr) ?? 0) + Number(e.amount_usd))
+    }
+    return Array.from(map.entries())
+      .map(([month, total]) => ({ month, total, label: format(parseISO(month + '-01'), 'MMM yyyy') }))
+      .sort((a, b) => b.month.localeCompare(a.month))
+  }, [myWeeklyEarnings])
 
-  // Aggregate earnings by person for leaderboard
+  const myTotal = myWeeklyEarnings.reduce((s, e) => s + Number(e.amount_usd), 0)
+  const myThisMonth = myMonthlyEarnings.find(m => m.month === format(new Date(), 'yyyy-MM'))?.total ?? 0
+  const myBestWeek = myWeeklyEarnings.length > 0 ? Math.max(...myWeeklyEarnings.map(e => Number(e.amount_usd))) : 0
+
+  // Leaderboard — filtered by selected month
   const leaderboard = useMemo(() => {
-    const map = new Map<string, { id: string; full_name: string; member_id: string; status: string; group_name: string; group_color: string; group_code: string; total: number }>()
-    for (const e of allEarnings) {
+    const filtered = allEarnings.filter(e => {
+      const monthStr = e.week_start.slice(0, 7)
+      return monthStr === monthFilter
+    })
+    const map = new Map<string, { id: string; full_name: string; member_id: string; status: string; group_name: string; group_color: string; total: number }>()
+    for (const e of filtered) {
       const p = e.profiles
       if (!p) continue
-      const existing = map.get(p.id) ?? {
+      if (statusFilter !== 'all' && p.status !== statusFilter) continue
+      if (groupFilter !== 'all' && p.color_groups?.code !== groupFilter) continue
+      const ex = map.get(p.id) ?? {
         id: p.id, full_name: p.full_name, member_id: p.member_id, status: p.status,
-        group_name: p.color_groups?.name ?? '—', group_color: p.color_groups?.hex_color ?? '#ccc', group_code: p.color_groups?.code ?? '',
-        total: 0,
+        group_name: p.color_groups?.name ?? '—', group_color: p.color_groups?.hex_color ?? '#ccc', total: 0,
       }
-      existing.total += Number(e.amount_usd)
-      map.set(p.id, existing)
-    }
-    return Array.from(map.values())
-      .filter(p => {
-        if (statusFilter !== 'all' && p.status !== statusFilter) return false
-        if (groupFilter !== 'all' && p.group_code !== groupFilter) return false
-        return true
-      })
-      .sort((a, b) => b.total - a.total)
-  }, [allEarnings, statusFilter, groupFilter])
-
-  // Group totals
-  const groupTotals = useMemo(() => {
-    const map = new Map<string, { name: string; hex_color: string; total: number; count: number }>()
-    for (const e of allEarnings) {
-      const g = e.profiles?.color_groups
-      if (!g) continue
-      const existing = map.get(g.name) ?? { name: g.name, hex_color: g.hex_color, total: 0, count: 0 }
-      existing.total += Number(e.amount_usd)
-      existing.count++
-      map.set(g.name, existing)
+      ex.total += Number(e.amount_usd)
+      map.set(p.id, ex)
     }
     return Array.from(map.values()).sort((a, b) => b.total - a.total)
+  }, [allEarnings, monthFilter, statusFilter, groupFilter])
+
+  // Group totals for selected month
+  const groupTotals = useMemo(() => {
+    const filtered = allEarnings.filter(e => e.week_start.slice(0, 7) === monthFilter)
+    const map = new Map<string, { name: string; hex_color: string; total: number; count: number }>()
+    for (const e of filtered) {
+      const g = e.profiles?.color_groups
+      if (!g) continue
+      const ex = map.get(g.name) ?? { name: g.name, hex_color: g.hex_color, total: 0, count: 0 }
+      ex.total += Number(e.amount_usd)
+      ex.count++
+      map.set(g.name, ex)
+    }
+    return Array.from(map.values()).sort((a, b) => b.total - a.total)
+  }, [allEarnings, monthFilter])
+
+  // Available months for filter
+  const availableMonths = useMemo(() => {
+    const months = new Set<string>()
+    allEarnings.forEach(e => months.add(e.week_start.slice(0, 7)))
+    return Array.from(months).sort().reverse()
   }, [allEarnings])
 
   async function recordEarning() {
-    if (!recordForm.user_id || !recordForm.amount) return
-    setLoading(true)
-    setMsg(null)
+    if (!recordForm.user_id || !recordForm.amount || !recordForm.date) return
+    setLoading(true); setMsg(null)
     const supabase = createClient()
-    const weekStart = new Date(recordForm.week_start)
-    const weekEnd = endOfWeek(weekStart, { weekStartsOn: 6 })
+    // Determine week bounds from the selected date
+    const selectedDate = new Date(recordForm.date)
+    const weekStart = startOfWeek(selectedDate, { weekStartsOn: 6 })
+    const weekEnd = endOfWeek(selectedDate, { weekStartsOn: 6 })
 
     const { error } = await supabase.from('weekly_earnings').upsert({
       user_id: recordForm.user_id,
-      week_start: recordForm.week_start,
+      week_start: format(weekStart, 'yyyy-MM-dd'),
       week_end: format(weekEnd, 'yyyy-MM-dd'),
       amount_usd: Number(recordForm.amount),
       recorded_by: profile.id,
@@ -87,92 +107,138 @@ export default function MoneyClient({
 
     if (error) setMsg({ type: 'error', text: error.message })
     else {
-      setMsg({ type: 'success', text: 'Earnings recorded!' })
+      setMsg({ type: 'success', text: `Earnings recorded for ${format(weekStart, 'MMM d')} – ${format(weekEnd, 'MMM d, yyyy')}` })
       setRecordForm(p => ({ ...p, amount: '', notes: '' }))
       setTimeout(() => window.location.reload(), 1200)
     }
     setLoading(false)
   }
 
+  const monthLabel = (m: string) => format(parseISO(m + '-01'), 'MMMM yyyy')
+
   return (
     <div className="space-y-6 max-w-6xl mx-auto">
-      {/* Tabs */}
       <div className="flex gap-1 bg-gray-100 p-1 rounded-xl w-fit flex-wrap">
         {[
           { id: 'me', label: 'My Earnings' },
           ...(isAdmin ? [
-            { id: 'leaderboard', label: 'Leaderboard' },
+            { id: 'leaderboard', label: 'Top Earners' },
             { id: 'groups', label: 'Group Rankings' },
             { id: 'record', label: 'Record Earnings' },
           ] : []),
         ].map(t => (
-          <button
-            key={t.id}
-            onClick={() => setTab(t.id as any)}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${tab === t.id ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
-          >
+          <button key={t.id} onClick={() => setTab(t.id as any)}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${tab === t.id ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}>
             {t.label}
           </button>
         ))}
       </div>
 
-      {/* My Earnings */}
+      {/* ── MY EARNINGS ── */}
       {tab === 'me' && (
         <div className="space-y-4">
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
             <div className="card p-4 bg-green-50">
-              <div className="text-xs text-gray-500 mb-1">Total Earned (All Time)</div>
-              <div className="text-2xl font-extrabold text-green-700">{formatCurrency(myTotal)}</div>
+              <div className="text-xs text-gray-500 mb-1">This Month</div>
+              <div className="text-2xl font-extrabold text-green-700">{formatCurrency(myThisMonth)}</div>
             </div>
             <div className="card p-4 bg-blue-50">
-              <div className="text-xs text-gray-500 mb-1">Weeks with Earnings</div>
-              <div className="text-2xl font-extrabold text-blue-700">{myEarnings.filter(e => e.amount_usd > 0).length}</div>
+              <div className="text-xs text-gray-500 mb-1">All Time Total</div>
+              <div className="text-2xl font-extrabold text-blue-700">{formatCurrency(myTotal)}</div>
             </div>
             <div className="card p-4 bg-purple-50">
-              <div className="text-xs text-gray-500 mb-1">Best Week</div>
-              <div className="text-2xl font-extrabold text-purple-700">
-                {myEarnings.length > 0 ? formatCurrency(Math.max(...myEarnings.map(e => Number(e.amount_usd)))) : '$0'}
-              </div>
+              <div className="text-xs text-gray-500 mb-1">Best Single Week</div>
+              <div className="text-2xl font-extrabold text-purple-700">{formatCurrency(myBestWeek)}</div>
             </div>
           </div>
 
-          <div className="card overflow-x-auto">
-            <div className="p-4 border-b border-gray-100">
-              <h2 className="section-title">Weekly Earnings History</h2>
+          {/* View toggle */}
+          <div className="flex gap-2">
+            {(['monthly', 'weekly'] as EarningView[]).map(v => (
+              <button key={v} onClick={() => setEarningView(v)}
+                className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all border ${earningView === v ? 'bg-brand-600 text-white border-brand-600' : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300'}`}>
+                {v === 'monthly' ? 'Monthly View' : 'Weekly View'}
+              </button>
+            ))}
+          </div>
+
+          {earningView === 'monthly' ? (
+            <div className="card overflow-x-auto">
+              <div className="p-4 border-b border-gray-100"><h2 className="section-title">Monthly Earnings</h2></div>
+              {myMonthlyEarnings.length === 0 ? (
+                <p className="text-sm text-gray-400 text-center py-8">No earnings recorded yet</p>
+              ) : (
+                <>
+                  <div className="p-4">
+                    <ResponsiveContainer width="100%" height={200}>
+                      <BarChart data={[...myMonthlyEarnings].reverse()}>
+                        <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+                        <YAxis tick={{ fontSize: 11 }} tickFormatter={v => `$${v}`} />
+                        <Tooltip formatter={(v: number) => formatCurrency(v)} />
+                        <Bar dataKey="total" fill="#4f46e5" radius={[4,4,0,0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                  <table className="w-full text-sm">
+                    <thead className="border-t border-gray-100"><tr>
+                      <th className="table-th">Month</th>
+                      <th className="table-th">Total Earned</th>
+                    </tr></thead>
+                    <tbody>
+                      {myMonthlyEarnings.map(m => (
+                        <tr key={m.month} className={`table-row ${m.month === format(new Date(), 'yyyy-MM') ? 'bg-green-50' : ''}`}>
+                          <td className="table-td font-medium">{m.label}</td>
+                          <td className="table-td font-bold text-green-700">{formatCurrency(m.total)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </>
+              )}
             </div>
-            {myEarnings.length === 0 ? (
-              <p className="text-sm text-gray-400 text-center py-8">No earnings recorded yet</p>
-            ) : (
-              <table className="w-full text-sm">
-                <thead className="border-b border-gray-100">
-                  <tr>
+          ) : (
+            <div className="card overflow-x-auto">
+              <div className="p-4 border-b border-gray-100"><h2 className="section-title">Weekly Earnings History</h2></div>
+              {myWeeklyEarnings.length === 0 ? (
+                <p className="text-sm text-gray-400 text-center py-8">No earnings recorded yet</p>
+              ) : (
+                <table className="w-full text-sm">
+                  <thead className="border-b border-gray-100"><tr>
                     <th className="table-th">Week</th>
                     <th className="table-th">Amount</th>
                     <th className="table-th">Notes</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {myEarnings.map(e => (
-                    <tr key={e.id} className="table-row">
-                      <td className="table-td">{getWeekLabel(e.week_start)}</td>
-                      <td className="table-td font-bold text-green-700">{formatCurrency(Number(e.amount_usd))}</td>
-                      <td className="table-td text-gray-400 text-xs">{e.notes ?? '—'}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </div>
+                  </tr></thead>
+                  <tbody>
+                    {myWeeklyEarnings.map(e => (
+                      <tr key={e.id} className="table-row">
+                        <td className="table-td">{format(parseISO(e.week_start), 'MMM d')} – {format(parseISO(e.week_end ?? e.week_start), 'MMM d, yyyy')}</td>
+                        <td className="table-td font-bold text-green-700">{formatCurrency(Number(e.amount_usd))}</td>
+                        <td className="table-td text-gray-400 text-xs">{e.notes ?? '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          )}
         </div>
       )}
 
-      {/* Leaderboard */}
+      {/* ── TOP EARNERS ── */}
       {tab === 'leaderboard' && isAdmin && (
         <div className="space-y-4">
-          <div className="flex gap-3 flex-wrap">
+          <div className="flex gap-3 flex-wrap items-center">
+            <select className="input w-auto" value={monthFilter} onChange={e => setMonthFilter(e.target.value)}>
+              {availableMonths.length === 0
+                ? <option value={format(new Date(), 'yyyy-MM')}>{monthLabel(format(new Date(), 'yyyy-MM'))}</option>
+                : availableMonths.map(m => <option key={m} value={m}>{monthLabel(m)}</option>)
+              }
+            </select>
             <select className="input w-auto" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
               <option value="all">All Statuses</option>
-              {['member','distributor','manager'].map(s => <option key={s} value={s}>{getStatusLabel(s as any)}</option>)}
+              {['member','distributor','manager','executive_manager'].map(s => (
+                <option key={s} value={s}>{getStatusLabel(s as any)}</option>
+              ))}
             </select>
             <select className="input w-auto" value={groupFilter} onChange={e => setGroupFilter(e.target.value)}>
               <option value="all">All Groups</option>
@@ -180,84 +246,92 @@ export default function MoneyClient({
             </select>
           </div>
 
+          <div className="card p-4 bg-brand-50 border-brand-200">
+            <div className="text-xs text-brand-600 font-semibold">Top Earners — {monthLabel(monthFilter)}</div>
+            <div className="text-xs text-brand-400 mt-0.5">Executive Manager and below only</div>
+          </div>
+
           <div className="card overflow-x-auto">
-            <div className="p-4 border-b border-gray-100">
-              <h2 className="section-title">All-Time Earners Leaderboard</h2>
-            </div>
             <table className="w-full text-sm">
-              <thead className="border-b border-gray-100">
-                <tr>
-                  <th className="table-th">Rank</th>
-                  <th className="table-th">Name</th>
-                  <th className="table-th">ID</th>
-                  <th className="table-th">Status</th>
-                  <th className="table-th">Group</th>
-                  <th className="table-th">Total Earned</th>
-                </tr>
-              </thead>
+              <thead className="border-b border-gray-100"><tr>
+                <th className="table-th">Rank</th>
+                <th className="table-th">Name</th>
+                <th className="table-th">ID</th>
+                <th className="table-th">Status</th>
+                <th className="table-th">Group</th>
+                <th className="table-th">Earned This Month</th>
+              </tr></thead>
               <tbody>
-                {leaderboard.map((p, i) => {
-                  const isMe = p.id === profile.id
-                  return (
-                    <tr key={p.id} className={`table-row ${isMe ? 'bg-brand-50' : ''}`}>
-                      <td className="table-td">
-                        <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${i < 3 ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-100 text-gray-500'}`}>
-                          {i + 1}
-                        </div>
-                      </td>
-                      <td className="table-td font-medium">{p.full_name} {isMe && <span className="text-brand-600 text-xs">(You)</span>}</td>
-                      <td className="table-td text-gray-400">{p.member_id}</td>
-                      <td className="table-td"><span className={`badge ${getStatusColor(p.status as any)}`}>{getStatusLabel(p.status as any)}</span></td>
-                      <td className="table-td">
-                        <div className="flex items-center gap-1.5">
-                          <div className="w-3 h-3 rounded-full" style={{ backgroundColor: p.group_color }} />
-                          {p.group_name}
-                        </div>
-                      </td>
-                      <td className="table-td font-bold text-green-700">{formatCurrency(p.total)}</td>
-                    </tr>
-                  )
-                })}
+                {leaderboard.length === 0 ? (
+                  <tr><td colSpan={6} className="table-td text-center text-gray-400 py-8">No earnings recorded for {monthLabel(monthFilter)}</td></tr>
+                ) : leaderboard.map((p, i) => (
+                  <tr key={p.id} className={`table-row ${p.id === profile.id ? 'bg-brand-50' : ''}`}>
+                    <td className="table-td">
+                      <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${i < 3 ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-100 text-gray-500'}`}>{i + 1}</div>
+                    </td>
+                    <td className="table-td font-medium">{p.full_name} {p.id === profile.id && <span className="text-brand-600 text-xs">(You)</span>}</td>
+                    <td className="table-td text-gray-400">{p.member_id}</td>
+                    <td className="table-td"><span className={`badge ${getStatusColor(p.status as any)}`}>{getStatusLabel(p.status as any)}</span></td>
+                    <td className="table-td">
+                      <div className="flex items-center gap-1.5">
+                        <div className="w-3 h-3 rounded-full" style={{ backgroundColor: p.group_color }} />
+                        {p.group_name}
+                      </div>
+                    </td>
+                    <td className="table-td font-bold text-green-700">{formatCurrency(p.total)}</td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
         </div>
       )}
 
-      {/* Group rankings */}
+      {/* ── GROUP RANKINGS ── */}
       {tab === 'groups' && isAdmin && (
         <div className="space-y-4">
-          <div className="card p-5">
-            <h2 className="section-title mb-4">Earnings by Color Group</h2>
-            <ResponsiveContainer width="100%" height={260}>
-              <BarChart data={groupTotals}>
-                <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-                <YAxis tick={{ fontSize: 11 }} tickFormatter={v => `$${v}`} />
-                <Tooltip formatter={(v: number) => formatCurrency(v)} />
-                <Bar dataKey="total" radius={[4,4,0,0]}>
-                  {groupTotals.map((g, i) => <Cell key={i} fill={g.hex_color} />)}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
+          <div className="flex gap-3">
+            <select className="input w-auto" value={monthFilter} onChange={e => setMonthFilter(e.target.value)}>
+              {availableMonths.length === 0
+                ? <option value={format(new Date(), 'yyyy-MM')}>{monthLabel(format(new Date(), 'yyyy-MM'))}</option>
+                : availableMonths.map(m => <option key={m} value={m}>{monthLabel(m)}</option>)
+              }
+            </select>
           </div>
+
+          {groupTotals.length > 0 && (
+            <div className="card p-5">
+              <h2 className="section-title mb-4">Group Earnings — {monthLabel(monthFilter)}</h2>
+              <ResponsiveContainer width="100%" height={240}>
+                <BarChart data={groupTotals}>
+                  <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+                  <YAxis tick={{ fontSize: 11 }} tickFormatter={v => `$${v}`} />
+                  <Tooltip formatter={(v: number) => formatCurrency(v)} />
+                  <Bar dataKey="total" radius={[4,4,0,0]}>
+                    {groupTotals.map((g, i) => <Cell key={i} fill={g.hex_color} />)}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
 
           <div className="card overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="border-b border-gray-100">
-                <tr>
-                  <th className="table-th">Rank</th>
-                  <th className="table-th">Group</th>
-                  <th className="table-th">Total Earned</th>
-                  <th className="table-th">Earners</th>
-                </tr>
-              </thead>
+              <thead className="border-b border-gray-100"><tr>
+                <th className="table-th">Rank</th>
+                <th className="table-th">Group</th>
+                <th className="table-th">Total Earned</th>
+                <th className="table-th">Earners</th>
+              </tr></thead>
               <tbody>
-                {groupTotals.map((g, i) => (
+                {groupTotals.length === 0 ? (
+                  <tr><td colSpan={4} className="table-td text-center text-gray-400 py-8">No data for {monthLabel(monthFilter)}</td></tr>
+                ) : groupTotals.map((g, i) => (
                   <tr key={g.name} className="table-row">
                     <td className="table-td font-bold text-gray-500">{i + 1}</td>
                     <td className="table-td">
                       <div className="flex items-center gap-2">
-                        <div className="w-5 h-5 rounded-full" style={{ backgroundColor: g.hex_color }} />
+                        <div className="w-4 h-4 rounded-full" style={{ backgroundColor: g.hex_color }} />
                         <span className="font-medium">{g.name}</span>
                       </div>
                     </td>
@@ -271,48 +345,51 @@ export default function MoneyClient({
         </div>
       )}
 
-      {/* Record earnings */}
+      {/* ── RECORD EARNINGS ── */}
       {tab === 'record' && isAdmin && (
         <div className="card p-6 max-w-lg">
-          <h2 className="section-title mb-4">Record Weekly Earnings</h2>
+          <h2 className="section-title mb-1">Record Earnings</h2>
+          <p className="text-sm text-gray-500 mb-4">
+            Select the member and the date the earnings were made. The app will automatically assign it to the correct week and month.
+          </p>
           <div className="space-y-4">
             <div>
               <label className="label">Member *</label>
               <select className="input" value={recordForm.user_id} onChange={e => setRecordForm(p => ({ ...p, user_id: e.target.value }))}>
                 <option value="">Select member…</option>
-                {allProfiles.map(p => (
-                  <option key={p.id} value={p.id}>{p.full_name} ({p.member_id})</option>
+                {allProfiles.map((p: any) => (
+                  <option key={p.id} value={p.id}>{p.full_name} ({p.member_id ?? 'No ID'})</option>
                 ))}
               </select>
             </div>
+
             <div>
-              <label className="label">Week Starting (Saturday) *</label>
-              <input
-                className="input"
-                type="date"
-                value={recordForm.week_start}
-                onChange={e => setRecordForm(p => ({ ...p, week_start: e.target.value }))}
-              />
+              <label className="label">Date Earned *</label>
+              <input className="input" type="date" value={recordForm.date}
+                onChange={e => setRecordForm(p => ({ ...p, date: e.target.value }))} />
+              {recordForm.date && (
+                <p className="text-xs text-gray-400 mt-1">
+                  This will be recorded under: <strong>{format(startOfWeek(new Date(recordForm.date), { weekStartsOn: 6 }), 'MMM d')} – {format(endOfWeek(new Date(recordForm.date), { weekStartsOn: 6 }), 'MMM d, yyyy')}</strong>
+                  {' '} · Month: <strong>{format(new Date(recordForm.date), 'MMMM yyyy')}</strong>
+                </p>
+              )}
             </div>
+
             <div>
               <label className="label">Amount (USD) *</label>
-              <input
-                className="input"
-                type="number"
-                step="0.01"
-                value={recordForm.amount}
-                onChange={e => setRecordForm(p => ({ ...p, amount: e.target.value }))}
-                placeholder="0.00"
-              />
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-medium">$</span>
+                <input className="input pl-7" type="number" step="0.01" min="0"
+                  value={recordForm.amount} onChange={e => setRecordForm(p => ({ ...p, amount: e.target.value }))}
+                  placeholder="0.00" />
+              </div>
             </div>
+
             <div>
-              <label className="label">Notes</label>
-              <input
-                className="input"
-                value={recordForm.notes}
+              <label className="label">Notes (optional)</label>
+              <input className="input" value={recordForm.notes}
                 onChange={e => setRecordForm(p => ({ ...p, notes: e.target.value }))}
-                placeholder="Optional notes"
-              />
+                placeholder="e.g. Fiverr order, client payment…" />
             </div>
 
             {msg && (
@@ -321,7 +398,8 @@ export default function MoneyClient({
               </div>
             )}
 
-            <button onClick={recordEarning} disabled={loading} className="btn-primary w-full py-3">
+            <button onClick={recordEarning} disabled={loading || !recordForm.user_id || !recordForm.amount || !recordForm.date}
+              className="btn-primary w-full py-3">
               {loading ? 'Recording…' : 'Record Earnings'}
             </button>
           </div>

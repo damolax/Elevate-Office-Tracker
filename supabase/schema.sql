@@ -483,3 +483,22 @@ alter table absence_emails enable row level security;
 
 create policy "Admins manage absence emails" on absence_emails
   for all using (is_admin_or_director());
+
+-- =============================================
+-- ACTIVITY STATUS & MONTHLY EARNINGS
+-- =============================================
+
+-- Add activity_status to profiles
+alter table profiles add column if not exists activity_status text not null default 'active'
+  check (activity_status in ('active','suspended','inactive','left_office','another_location','moved_to_another_office'));
+
+-- Monthly earnings view
+create or replace view monthly_earnings as
+select
+  user_id,
+  date_trunc('month', week_start::date)::date as month,
+  to_char(week_start::date, 'YYYY-MM') as month_str,
+  sum(amount_usd) as total_usd,
+  count(*) as weeks_with_earnings
+from weekly_earnings
+group by user_id, date_trunc('month', week_start::date)::date, to_char(week_start::date, 'YYYY-MM');

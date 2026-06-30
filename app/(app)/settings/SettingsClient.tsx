@@ -84,15 +84,18 @@ export default function SettingsClient({
   }
 
   async function uploadAvatar(file: File) {
-    const supabase = createClient()
-    const ext = file.name.split('.').pop()
-    const path = `${profile.id}/avatar.${ext}`
-    const { error: uploadError } = await supabase.storage.from('avatars').upload(path, file, { upsert: true })
-    if (uploadError) { setMsg({ type: 'error', text: uploadError.message }); return }
-    const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(path)
-    await supabase.from('profiles').update({ profile_picture: publicUrl }).eq('id', profile.id)
-    setMsg({ type: 'success', text: 'Profile picture updated!' })
-    setTimeout(() => window.location.reload(), 1000)
+    const formData = new FormData()
+    formData.append('file', file)
+      formData.append('userId', profile.id)
+    try {
+      const res = await fetch('/api/upload-avatar', { method: 'POST', body: formData })
+      const data = await res.json()
+      if (!res.ok) { setMsg({ type: 'error', text: data.error ?? 'Upload failed' }); return }
+      setMsg({ type: 'success', text: 'Profile picture updated!' })
+      setTimeout(() => window.location.reload(), 1000)
+    } catch {
+      setMsg({ type: 'error', text: 'Upload failed. Please try again.' })
+    }
   }
 
   async function addColorGroup() {

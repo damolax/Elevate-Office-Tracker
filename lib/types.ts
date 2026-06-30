@@ -15,6 +15,33 @@ export const STATUS_LABELS: Record<UserStatus, string> = {
   director: 'Director',
 }
 
+
+export type ActivityStatus =
+  | 'active'
+  | 'suspended'
+  | 'inactive'
+  | 'left_office'
+  | 'another_location'
+  | 'moved_to_another_office'
+
+export const ACTIVITY_STATUS_LABELS: Record<ActivityStatus, string> = {
+  active: 'Active',
+  suspended: 'Suspended',
+  inactive: 'Inactive',
+  left_office: 'Left Office',
+  another_location: 'Another Location',
+  moved_to_another_office: 'Moved to Another Office',
+}
+
+export const ACTIVITY_STATUS_COLORS: Record<ActivityStatus, string> = {
+  active: 'bg-green-100 text-green-700',
+  suspended: 'bg-red-100 text-red-700',
+  inactive: 'bg-gray-100 text-gray-500',
+  left_office: 'bg-orange-100 text-orange-700',
+  another_location: 'bg-blue-100 text-blue-700',
+  moved_to_another_office: 'bg-purple-100 text-purple-700',
+}
+
 export const STATUS_ORDER: UserStatus[] = [
   'member', 'distributor', 'manager',
   'senior_manager', 'executive_manager', 'director',
@@ -59,6 +86,7 @@ export interface Profile {
   is_new_member: boolean
   new_member_month: string | null
   is_office_already: boolean
+  activity_status: ActivityStatus
   created_at: string
   updated_at: string
   color_groups?: ColorGroup
