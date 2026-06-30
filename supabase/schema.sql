@@ -502,3 +502,65 @@ select
   count(*) as weeks_with_earnings
 from weekly_earnings
 group by user_id, date_trunc('month', week_start::date)::date, to_char(week_start::date, 'YYYY-MM');
+
+-- =============================================
+-- GROUP LEADER & CONSISTENT EARNER POINTS
+-- =============================================
+
+-- Add is_group_leader to profiles (set when member_id ends in 001)
+alter table profiles add column if not exists is_group_leader boolean not null default false;
+
+-- Consistent earner points table
+create table if not exists earner_points (
+  id uuid primary key default uuid_generate_v4(),
+  user_id uuid not null references profiles(id) on delete cascade,
+  month_str text not null,           -- 'YYYY-MM'
+  rank integer not null,             -- 1st, 2nd, 3rd etc
+  points integer not null,           -- 10,9,8...1,0
+  amount_usd numeric not null,
+  created_at timestamptz not null default now(),
+  unique(user_id, month_str)
+);
+
+alter table earner_points enable row level security;
+
+create policy "Anyone can view earner points" on earner_points
+  for select using (true);
+
+create policy "Admins manage earner points" on earner_points
+  for all using (is_admin_or_director());
+
+-- Function: auto-calculate and upsert earner points for a month
+create or replace function calculate_earner_points(p_month_str text)
+returns void as $$
+declare
+  r record;
+  v_rank integer := 1;
+  v_points integer;
+begin
+  -- Delete existing points for this month
+  delete from earner_points where month_str = p_month_str;
+
+  -- Recalculate from weekly_earnings
+  for r in (
+    select
+      p.id as user_id,
+      sum(we.amount_usd) as total_usd
+    from weekly_earnings we
+    join profiles p on p.id = we.user_id
+    where to_char(we.week_start::date, 'YYYY-MM') = p_month_str
+      and p.status in ('member','distributor','manager','executive_manager')
+      and p.approved = true
+    group by p.id
+    order by sum(we.amount_usd) desc
+  ) loop
+    v_points := greatest(0, 11 - v_rank); -- 1st=10, 2nd=9...10th=1, 11th+=0
+    if v_rank > 10 then v_points := 0; end if;
+
+    insert into earner_points (user_id, month_str, rank, points, amount_usd)
+    values (r.user_id, p_month_str, v_rank, v_points, r.total_usd);
+
+    v_rank := v_rank + 1;
+  end loop;
+end;
+$$ language plpgsql security definer;

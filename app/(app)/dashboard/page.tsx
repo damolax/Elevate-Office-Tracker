@@ -1,14 +1,9 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
-import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, subMonths, parseISO } from 'date-fns'
-import { formatCurrency, getStatusLabel } from '@/lib/utils'
+import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, subMonths } from 'date-fns'
 import DashboardClient from './DashboardClient'
 
-export default async function DashboardPage({
-  searchParams,
-}: {
-  searchParams: { range?: string }
-}) {
+export default async function DashboardPage({ searchParams }: { searchParams: { range?: string } }) {
   const supabase = createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
@@ -18,177 +13,191 @@ export default async function DashboardPage({
     .select('*, color_groups(*), sponsor:sponsor_id(id, full_name, member_id)')
     .eq('id', user.id)
     .single()
-
   if (!profile) redirect('/login')
+  if (!profile.approved) redirect('/pending-approval')
 
   const range = searchParams.range ?? 'this_month'
   const now = new Date()
+  const todayStr = format(now, 'yyyy-MM-dd')
+  const thisMonthStart = format(startOfMonth(now), 'yyyy-MM-dd')
+  const thisMonthEnd = format(endOfMonth(now), 'yyyy-MM-dd')
+  const thisMonthStr = format(now, 'yyyy-MM')
+  const isAdmin = profile.is_admin || profile.is_director
+  const isEMOrBelow = ['member','distributor','manager','executive_manager'].includes(profile.status)
 
-  // Date range
-  let rangeStart: Date
-  let rangeEnd: Date = now
-
+  let rangeStart: string, rangeEnd: string
   switch (range) {
     case 'this_week':
-      rangeStart = startOfWeek(now, { weekStartsOn: 6 })
-      rangeEnd = endOfWeek(now, { weekStartsOn: 6 })
+      rangeStart = format(startOfWeek(now, { weekStartsOn: 1 }), 'yyyy-MM-dd')
+      rangeEnd = format(endOfWeek(now, { weekStartsOn: 1 }), 'yyyy-MM-dd')
       break
     case 'last_month':
-      rangeStart = startOfMonth(subMonths(now, 1))
-      rangeEnd = endOfMonth(subMonths(now, 1))
+      rangeStart = format(startOfMonth(subMonths(now, 1)), 'yyyy-MM-dd')
+      rangeEnd = format(endOfMonth(subMonths(now, 1)), 'yyyy-MM-dd')
       break
     case 'last_3_months':
-      rangeStart = startOfMonth(subMonths(now, 3))
-      break
+      rangeStart = format(startOfMonth(subMonths(now, 3)), 'yyyy-MM-dd')
+      rangeEnd = todayStr; break
     case 'last_6_months':
-      rangeStart = startOfMonth(subMonths(now, 6))
-      break
+      rangeStart = format(startOfMonth(subMonths(now, 6)), 'yyyy-MM-dd')
+      rangeEnd = todayStr; break
     case 'last_year':
-      rangeStart = new Date(now.getFullYear() - 1, now.getMonth(), 1)
-      break
-    default: // this_month
-      rangeStart = startOfMonth(now)
-      rangeEnd = endOfMonth(now)
+      rangeStart = format(new Date(now.getFullYear() - 1, now.getMonth(), 1), 'yyyy-MM-dd')
+      rangeEnd = todayStr; break
+    default:
+      rangeStart = thisMonthStart
+      rangeEnd = thisMonthEnd
   }
 
-  const isAdmin = profile.is_admin || profile.is_director
-
-  // Fetch data based on role
   const [
     { data: myAttendance },
     { data: myEarnings },
-    { data: myScouting, count: myScoutingCount },
-    { data: officeAttendanceToday },
+    { count: myScoutingCount },
+    { data: todayAttendance },
     { data: colorGroups },
-    { data: topEarners },
-    { data: newMembersMonth },
-    { data: groupEarnings },
+    { data: topEarnersRaw },
+    { count: newMembersCount },
+    { data: groupEarningsRaw },
     { data: settings },
-    { data: lastMonthTopEarners },
+    { data: todayScouts },
+    { data: groupScouts },
+    { data: consistentPoints },
+    { data: myPoints },
   ] = await Promise.all([
-    // My attendance in range
+    supabase.from('attendance').select('date').eq('user_id', user.id)
+      .gte('date', rangeStart).lte('date', rangeEnd).not('sign_in_time', 'is', null),
+
+    supabase.from('weekly_earnings').select('amount_usd').eq('user_id', user.id)
+      .gte('week_start', rangeStart).lte('week_start', rangeEnd),
+
+    supabase.from('scouting_records').select('id', { count: 'exact', head: true })
+      .eq('user_id', user.id).eq('status', 'contacted'),
+
     supabase.from('attendance')
-      .select('date, sign_in_time, sign_out_time')
-      .eq('user_id', user.id)
-      .gte('date', format(rangeStart, 'yyyy-MM-dd'))
-      .lte('date', format(rangeEnd, 'yyyy-MM-dd'))
-      .not('sign_in_time', 'is', null),
+      .select('user_id, profiles!inner(id, full_name, member_id, status, color_group_id, profile_picture, color_groups(name, hex_color))')
+      .eq('date', todayStr).not('sign_in_time', 'is', null),
 
-    // My earnings in range
-    supabase.from('weekly_earnings')
-      .select('amount_usd, week_start')
-      .eq('user_id', user.id)
-      .gte('week_start', format(rangeStart, 'yyyy-MM-dd'))
-      .lte('week_start', format(rangeEnd, 'yyyy-MM-dd')),
-
-    // My scouting
-    supabase.from('scouting_records')
-      .select('id', { count: 'exact', head: true })
-      .eq('user_id', user.id)
-      .gte('scouted_at', rangeStart.toISOString()),
-
-    // Today's office attendance (admin only)
-    isAdmin
-      ? supabase.from('attendance')
-          .select('id, profiles!inner(full_name, status, member_id)')
-          .eq('date', format(now, 'yyyy-MM-dd'))
-          .not('sign_in_time', 'is', null)
-      : { data: null },
-
-    // Color groups with member counts
     supabase.from('color_groups').select('*').order('member_count', { ascending: false }),
 
-    // Top earners (managers and below only, current month)
+    // Top 20 earners EM and below this month
     supabase.from('weekly_earnings')
-      .select('amount_usd, profiles!inner(id, full_name, member_id, status, color_group_id, color_groups(name, hex_color))')
-      .gte('week_start', format(startOfMonth(now), 'yyyy-MM-dd'))
-      .lte('week_start', format(endOfMonth(now), 'yyyy-MM-dd'))
-      .in('profiles.status', ['member', 'distributor', 'manager']),
+      .select('amount_usd, profiles!inner(id, full_name, member_id, status, profile_picture, color_groups(name, hex_color))')
+      .gte('week_start', thisMonthStart).lte('week_start', thisMonthEnd)
+      .in('profiles.status', ['member','distributor','manager','executive_manager']),
 
-    // New members this month
-    supabase.from('profiles')
-      .select('id', { count: 'exact', head: true })
-      .eq('is_new_member', true)
-      .eq('new_member_month', format(now, 'yyyy-MM')),
+    supabase.from('profiles').select('id', { count: 'exact', head: true })
+      .eq('is_new_member', true).eq('new_member_month', thisMonthStr),
 
-    // Earnings by color group this month
+    // Group earnings this month
     supabase.from('weekly_earnings')
       .select('amount_usd, profiles!inner(color_group_id, color_groups(name, hex_color))')
-      .gte('week_start', format(startOfMonth(now), 'yyyy-MM-dd')),
+      .gte('week_start', thisMonthStart).lte('week_start', thisMonthEnd),
 
-    // App settings
     supabase.from('app_settings').select('key, value'),
 
-    // Last month top earners
-    supabase.from('weekly_earnings')
-      .select('amount_usd, profiles!inner(id, full_name, member_id, status, color_groups(name, hex_color))')
-      .gte('week_start', format(startOfMonth(subMonths(now, 1)), 'yyyy-MM-dd'))
-      .lte('week_start', format(endOfMonth(subMonths(now, 1)), 'yyyy-MM-dd'))
-      .in('profiles.status', ['member', 'distributor', 'manager']),
+    // Top scouts today (by contacted count)
+    supabase.from('scouting_records')
+      .select('user_id, profiles!inner(id, full_name, member_id, profile_picture, color_groups(name, hex_color))')
+      .eq('status', 'contacted')
+      .gte('scouted_at', new Date(todayStr).toISOString())
+      .lt('scouted_at', new Date(new Date(todayStr).getTime() + 864e5).toISOString()),
+
+    // Scouting by color group (all time)
+    supabase.from('scouting_records')
+      .select('user_id, profiles!inner(color_group_id, color_groups(name, hex_color))')
+      .eq('status', 'contacted'),
+
+    // Consistent earner points (top 20)
+    supabase.from('earner_points')
+      .select('user_id, points, month_str, rank, amount_usd, profiles(id, full_name, member_id, profile_picture, color_groups(name, hex_color))')
+      .order('month_str', { ascending: false }),
+
+    // My own points
+    supabase.from('earner_points')
+      .select('points, month_str, rank').eq('user_id', user.id),
   ])
 
-  const myTotalEarnings = (myEarnings ?? []).reduce((s, e) => s + Number(e.amount_usd), 0)
-  const myAttendanceDays = (myAttendance ?? []).length
-  const settingsMap = Object.fromEntries((settings ?? []).map(s => [s.key, s.value]))
-
   // Aggregate top earners
-  const earnerMap = new Map<string, { id: string; full_name: string; member_id: string; status: string; total: number; group_name: string; group_color: string }>()
-  for (const e of (topEarners ?? [])) {
+  const earnerMap = new Map<string, any>()
+  for (const e of (topEarnersRaw ?? [])) {
     const p = (e as any).profiles
     if (!p) continue
-    const existing = earnerMap.get(p.id) ?? {
-      id: p.id, full_name: p.full_name, member_id: p.member_id, status: p.status,
-      total: 0, group_name: p.color_groups?.name ?? '—', group_color: p.color_groups?.hex_color ?? '#999',
-    }
-    existing.total += Number(e.amount_usd)
-    earnerMap.set(p.id, existing)
+    const ex = earnerMap.get(p.id) ?? { id: p.id, full_name: p.full_name, member_id: p.member_id, status: p.status, profile_picture: p.profile_picture, total: 0, group_name: p.color_groups?.name ?? '—', group_color: p.color_groups?.hex_color ?? '#999' }
+    ex.total += Number(e.amount_usd)
+    earnerMap.set(p.id, ex)
   }
-  const sortedEarners = Array.from(earnerMap.values()).sort((a, b) => b.total - a.total).slice(0, 20)
-
-  // Last month top earners
-  const lastMonthMap = new Map<string, { id: string; full_name: string; member_id: string; total: number; group_name: string }>()
-  for (const e of (lastMonthTopEarners ?? [])) {
-    const p = (e as any).profiles
-    if (!p) continue
-    const existing = lastMonthMap.get(p.id) ?? {
-      id: p.id, full_name: p.full_name, member_id: p.member_id, total: 0, group_name: p.color_groups?.name ?? '—',
-    }
-    existing.total += Number(e.amount_usd)
-    lastMonthMap.set(p.id, existing)
-  }
-  const lastMonthSorted = Array.from(lastMonthMap.values()).sort((a, b) => b.total - a.total).slice(0, 3)
+  const topEarners = Array.from(earnerMap.values()).sort((a, b) => b.total - a.total).slice(0, 20)
+  const myRank = topEarners.findIndex(e => e.id === user.id) + 1
 
   // Group earnings
-  const groupMap = new Map<string, { name: string; hex_color: string; total: number }>()
-  for (const e of (groupEarnings ?? [])) {
+  const groupMap = new Map<string, any>()
+  for (const e of (groupEarningsRaw ?? [])) {
     const p = (e as any).profiles
     if (!p?.color_groups) continue
-    const key = p.color_groups.name
-    const existing = groupMap.get(key) ?? { name: p.color_groups.name, hex_color: p.color_groups.hex_color, total: 0 }
-    existing.total += Number(e.amount_usd)
-    groupMap.set(key, existing)
+    const ex = groupMap.get(p.color_groups.name) ?? { name: p.color_groups.name, hex_color: p.color_groups.hex_color, total: 0 }
+    ex.total += Number(e.amount_usd)
+    groupMap.set(p.color_groups.name, ex)
   }
-  const sortedGroups = Array.from(groupMap.values()).sort((a, b) => b.total - a.total)
+  const groupEarnings = Array.from(groupMap.values()).sort((a, b) => b.total - a.total)
 
-  // My ranking
-  const myRank = sortedEarners.findIndex(e => e.id === user.id) + 1
+  // Top 3 scouts today
+  const scoutMap = new Map<string, any>()
+  for (const s of (todayScouts ?? [])) {
+    const p = (s as any).profiles
+    if (!p) continue
+    const ex = scoutMap.get(p.id) ?? { id: p.id, full_name: p.full_name, member_id: p.member_id, profile_picture: p.profile_picture, group_name: p.color_groups?.name ?? '—', group_color: p.color_groups?.hex_color ?? '#999', count: 0 }
+    ex.count++
+    scoutMap.set(p.id, ex)
+  }
+  const topScoutsToday = Array.from(scoutMap.values()).sort((a, b) => b.count - a.count).slice(0, 3)
+
+  // Scouting by color group
+  const groupScoutMap = new Map<string, any>()
+  for (const s of (groupScouts ?? [])) {
+    const p = (s as any).profiles
+    if (!p?.color_groups) continue
+    const ex = groupScoutMap.get(p.color_groups.name) ?? { name: p.color_groups.name, hex_color: p.color_groups.hex_color, count: 0 }
+    ex.count++
+    groupScoutMap.set(p.color_groups.name, ex)
+  }
+  const groupScoutLeaderboard = Array.from(groupScoutMap.values()).sort((a, b) => b.count - a.count)
+
+  // Consistent earner leaderboard
+  const pointsMap = new Map<string, any>()
+  for (const ep of (consistentPoints ?? [])) {
+    const p = (ep as any).profiles
+    if (!p) continue
+    const ex = pointsMap.get(p.id) ?? { id: p.id, full_name: p.full_name, member_id: p.member_id, profile_picture: p.profile_picture, group_name: p.color_groups?.name ?? '—', group_color: p.color_groups?.hex_color ?? '#999', totalPoints: 0, months: 0 }
+    ex.totalPoints += ep.points
+    ex.months++
+    pointsMap.set(p.id, ex)
+  }
+  const consistentEarners = Array.from(pointsMap.values()).sort((a, b) => b.totalPoints - a.totalPoints).slice(0, 20)
+  const myTotalPoints = (myPoints ?? []).reduce((s, p) => s + p.points, 0)
+
+  const settingsMap = Object.fromEntries((settings ?? []).map(s => [s.key, s.value]))
 
   return (
     <DashboardClient
       profile={profile}
       range={range}
-      myAttendanceDays={myAttendanceDays}
-      myTotalEarnings={myTotalEarnings}
+      myAttendanceDays={(myAttendance ?? []).length}
+      myTotalEarnings={(myEarnings ?? []).reduce((s, e) => s + Number(e.amount_usd), 0)}
       myScoutingCount={myScoutingCount ?? 0}
       myRank={myRank}
-      todayAttendanceCount={officeAttendanceToday?.length ?? 0}
-      newMembersCount={newMembersMonth?.length ?? 0}
-      topEarners={sortedEarners}
-      lastMonthTopEarners={lastMonthSorted}
-      groupEarnings={sortedGroups}
+      myTotalPoints={myTotalPoints}
+      todayAttendanceCount={todayAttendance?.length ?? 0}
+      todayAttendees={(todayAttendance ?? []).map((a: any) => a.profiles)}
+      newMembersCount={newMembersCount ?? 0}
+      topEarners={topEarners}
+      groupEarnings={groupEarnings}
       colorGroups={colorGroups ?? []}
       isAdmin={isAdmin}
+      isEMOrBelow={isEMOrBelow}
       settingsMap={settingsMap}
+      topScoutsToday={topScoutsToday}
+      groupScoutLeaderboard={groupScoutLeaderboard}
+      consistentEarners={consistentEarners}
     />
   )
 }
