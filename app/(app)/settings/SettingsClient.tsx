@@ -46,14 +46,27 @@ export default function SettingsClient({
 
   async function saveProfile() {
     setLoading(true); setMsg(null)
-    const supabase = createClient()
-    const { error } = await supabase.from('profiles').update({
-      full_name: profileForm.full_name,
-      phone: profileForm.phone || null,
-      about: profileForm.about || null,
-    }).eq('id', profile.id)
-    if (error) setMsg({ type: 'error', text: error.message })
-    else setMsg({ type: 'success', text: 'Profile updated!' })
+    try {
+      const res = await fetch('/api/update-profile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user_id: profile.id,
+          updates: {
+            full_name: profileForm.full_name,
+            phone: profileForm.phone || null,
+            about: profileForm.about || null,
+          }
+        })
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? 'Update failed')
+      setMsg({ type: 'success', text: 'Profile updated!' })
+      // Update displayed name immediately without full reload
+      setTimeout(() => window.location.reload(), 800)
+    } catch (err: unknown) {
+      setMsg({ type: 'error', text: err instanceof Error ? err.message : 'Update failed' })
+    }
     setLoading(false)
   }
 
