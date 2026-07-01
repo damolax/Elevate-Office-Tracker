@@ -230,6 +230,10 @@ export default function PeopleClient({
             </div>
           </div>
           <div className="flex gap-2">
+            <button onClick={e => { e.stopPropagation(); setSelectedProfile(null) }}
+              className="btn-icon text-gray-400 hover:text-gray-600" title="Close">
+              <X size={16} />
+            </button>
             {canDelete(p) && (
               <button onClick={() => { setConfirmAction({ type: 'delete', profile: p }); setDeleteConfirmName('') }}
                 className="btn-icon text-red-400 hover:text-red-600" title="Delete">
@@ -408,11 +412,15 @@ export default function PeopleClient({
           {filtered.length === 0
             ? <p className="text-sm text-gray-400 text-center py-12">No active members found</p>
             : filtered.map(p => (
-              <div key={p.id} onClick={() => setSelectedProfile(p === selectedProfile ? null : p)} className="cursor-pointer">
+              <div key={p.id}>
                 {selectedProfile?.id === p.id
-                  ? <ProfileCard p={p} />
+                  ? <div onClick={e => e.stopPropagation()}><ProfileCard p={p} /></div>
                   : (
-                    <div className="card p-4 flex items-center gap-3 hover:shadow-md transition-shadow">
+                    <button
+                      type="button"
+                      className="w-full card p-4 flex items-center gap-3 hover:shadow-md transition-shadow text-left"
+                      onClick={e => { e.stopPropagation(); setSelectedProfile(p); setMsg(null) }}
+                    >
                       <div className="w-9 h-9 rounded-full flex items-center justify-center font-bold text-white text-sm flex-shrink-0"
                         style={{ backgroundColor: colorGroups.find(g => g.id === p.color_group_id)?.hex_color ?? '#6366f1' }}>
                         {p.full_name.charAt(0)}
@@ -423,7 +431,7 @@ export default function PeopleClient({
                       </div>
                       {p.is_co_admin && <span className="badge bg-purple-100 text-purple-700 text-xs">Co-Admin</span>}
                       <ChevronRight size={16} className="text-gray-300" />
-                    </div>
+                    </button>
                   )
                 }
               </div>
@@ -438,11 +446,15 @@ export default function PeopleClient({
           {filtered.length === 0
             ? <p className="text-sm text-gray-400 text-center py-12">No inactive members</p>
             : filtered.map(p => (
-              <div key={p.id} onClick={() => setSelectedProfile(p === selectedProfile ? null : p)} className="cursor-pointer">
+              <div key={p.id}>
                 {selectedProfile?.id === p.id
-                  ? <ProfileCard p={p} />
+                  ? <div onClick={e => e.stopPropagation()}><ProfileCard p={p} /></div>
                   : (
-                    <div className="card p-4 flex items-center gap-3 opacity-70 hover:opacity-100 transition-opacity">
+                    <button
+                      type="button"
+                      className="w-full card p-4 flex items-center gap-3 opacity-70 hover:opacity-100 transition-opacity text-left"
+                      onClick={e => { e.stopPropagation(); setSelectedProfile(p); setMsg(null) }}
+                    >
                       <div className="w-9 h-9 rounded-full bg-gray-300 flex items-center justify-center font-bold text-white text-sm flex-shrink-0">
                         {p.full_name.charAt(0)}
                       </div>
@@ -451,7 +463,7 @@ export default function PeopleClient({
                         <div className="text-xs text-gray-400">{getStatusLabel(p.status)} · <span className={`${ACTIVITY_STATUS_COLORS[(p.activity_status || 'inactive') as ActivityStatus]}`}>{ACTIVITY_STATUS_LABELS[(p.activity_status || 'inactive') as ActivityStatus]}</span></div>
                       </div>
                       <ChevronRight size={16} className="text-gray-300" />
-                    </div>
+                    </button>
                   )
                 }
               </div>

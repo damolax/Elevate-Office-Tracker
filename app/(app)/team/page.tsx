@@ -1,55 +1,63 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import TeamClient from './TeamClient'
+import { computeTeam, STATUS_ORDER, UserStatus } from '@/lib/types'
+import type { Profile } from '@/lib/types'
 
-export default async function TeamPage({ searchParams }: { searchParams: { member?: string } }) {
+export default async function TeamPage({ searchParams }: { searchParams: { filter?: string; member?: string } }) {
   const supabase = createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const { data: profile } = await supabase.from('profiles').select('*, color_groups(*)').eq('id', user.id).single()
+  const { data: profile } = await supabase
+    .from('profiles').select('*, color_groups(*)').eq('id', user.id).single()
   if (!profile) redirect('/login')
 
-  const isAdmin = profile.is_admin || profile.is_director
+  const isAdmin = profile.is_admin || profile.is_director || profile.is_co_admin
 
-  // Get all profiles to build tree
   const { data: allProfiles } = await supabase
     .from('profiles')
     .select('*, color_groups(name, hex_color, code), sponsor:sponsor_id(id, full_name, member_id)')
     .eq('approved', true)
     .order('full_name')
 
-  // Find my direct downlines (people who have me as sponsor)
-  const directDownlines = (allProfiles ?? []).filter(p => p.sponsor_id === user.id)
+  const profiles = allProfiles ?? []
 
-  // Find everyone in my team recursively
-  function getAllTeam(profileId: string, profiles: typeof allProfiles): typeof allProfiles {
-    const direct = (profiles ?? []).filter(p => p.sponsor_id === profileId)
-    return direct.flatMap(p => [p, ...getAllTeam(p.id, profiles)])
-  }
+  // Compute all team filter options for this person
+  const teamFilters: Record<string, string[]> = {}
+  teamFilters['all'] = computeTeam(user.id, 'member' as UserStatus, profiles as Profile[])
 
-  const myTeam = isAdmin ? (allProfiles ?? []) : getAllTeam(user.id, allProfiles)
-
-  // For admin: if viewing a specific member's tree
-  let viewingMember = null
-  if (isAdmin && searchParams.member) {
-    viewingMember = (allProfiles ?? []).find(p => p.id === searchParams.member)
-  }
-
-  // My SM team (non-SM members under me)
-  const mySmTeam = myTeam.filter(p =>
-    ['member','distributor','manager'].includes(p.status) && p.id !== user.id
+  // Build available filter levels based on what statuses exist in my downline
+  const myFullDownline = teamFilters['all']
+  const statusesInDownline = new Set(
+    profiles.filter(p => myFullDownline.includes(p.id)).map(p => p.status)
   )
+
+  STATUS_ORDER.forEach(status => {
+    if (statusesInDownline.has(status)) {
+      teamFilters[status] = computeTeam(user.id, status as UserStatus, profiles as Profile[])
+    }
+  })
+
+  const activeFilter = (searchParams.filter as UserStatus) || 'all'
+  const filteredTeamIds = teamFilters[activeFilter] ?? teamFilters['all']
+  const myTeam = profiles.filter(p => filteredTeamIds.includes(p.id))
+
+  // Viewing a specific member's tree
+  const viewingMember = searchParams.member
+    ? profiles.find(p => p.id === searchParams.member) ?? null
+    : null
 
   return (
     <TeamClient
-      profile={profile}
+      profile={profile as Profile}
       isAdmin={isAdmin}
-      myTeam={myTeam as any[]}
-      mySmTeam={mySmTeam as any[]}
-      directDownlines={directDownlines as any[]}
-      allProfiles={(allProfiles ?? []) as any[]}
-      viewingMember={viewingMember as any}
+      myTeam={myTeam as Profile[]}
+      allProfiles={profiles as Profile[]}
+      viewingMember={viewingMember as Profile | null}
+      availableFilters={Object.keys(teamFilters)}
+      activeFilter={activeFilter}
+      teamCounts={Object.fromEntries(Object.entries(teamFilters).map(([k, v]) => [k, v.length]))}
     />
   )
 }

@@ -177,6 +177,12 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
 
   const settingsMap = Object.fromEntries((settings ?? []).map(s => [s.key, s.value]))
 
+  // Fetch color groups for leaderboard
+  const { data: colorGroups } = await supabase
+    .from('color_groups')
+    .select('id, name, hex_color, code, member_count, group_leader_id')
+    .order('name')
+
   return (
     <DashboardClient
       profile={profile}

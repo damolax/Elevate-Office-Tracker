@@ -1,3 +1,4 @@
+import { isOnline, lastSeenLabel } from '@/lib/useLastSeen'
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
@@ -47,7 +48,7 @@ export default function CommunityClient({
         // Fetch the full post with profile data
         const { data } = await supabase
           .from('community_posts')
-          .select('*, profiles(id, full_name, member_id, profile_picture, status, color_groups(name, hex_color))')
+          .select('*, profiles(id, full_name, member_id, profile_picture, status, last_seen, color_groups(name, hex_color))')
           .eq('id', payload.new.id)
           .single()
 
