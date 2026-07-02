@@ -39,37 +39,13 @@ export function getCurrentMonth() {
   return format(new Date(), 'yyyy-MM')
 }
 
-export function getStatusColor(status: UserStatus): string {
-  const colors: Record<UserStatus, string> = {
-    member: 'bg-gray-100 text-gray-700',
-    distributor: 'bg-blue-100 text-blue-700',
-    manager: 'bg-green-100 text-green-700',
-    senior_manager: 'bg-purple-100 text-purple-700',
-    executive_manager: 'bg-orange-100 text-orange-700',
-    director: 'bg-red-100 text-red-700',
-  }
-  return colors[status] ?? 'bg-gray-100 text-gray-700'
-}
 
-export function getStatusLabel(status: UserStatus): string {
-  const labels: Record<UserStatus, string> = {
-    member: 'Member',
-    distributor: 'Distributor',
-    manager: 'Manager',
-    senior_manager: 'Senior Manager',
-    executive_manager: 'Executive Manager',
-    director: 'Director',
-  }
-  return labels[status] ?? status
-}
 
-export function isSmOrAbove(status: UserStatus) {
-  return ['senior_manager', 'executive_manager', 'director'].includes(status)
-}
 
-export function isManagerOrBelow(status: UserStatus) {
-  return ['member', 'distributor', 'manager'].includes(status)
-}
+
+
+
+
 
 export function getAttendanceWindow(date: Date = new Date()) {
   const day = date.getDay()
@@ -114,3 +90,6 @@ export function truncate(str: string, len = 100) {
 export function getDayAttendanceStats(attendances: { sign_in_time: string | null }[]) {
   return attendances.filter(a => a.sign_in_time !== null).length
 }
+
+// Re-exported from types.ts for backward compatibility
+export { getStatusLabel, getStatusColor, isSmOrAbove, isManagerOrBelow, isDirectorOrAbove, statusRank } from './types'
