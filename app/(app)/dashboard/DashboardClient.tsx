@@ -1,5 +1,4 @@
 'use client'
-import Leaderboard from '@/components/leaderboard/Leaderboard'
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
@@ -66,7 +65,7 @@ function SectionHeader({ title, sub }: { title: string; sub?: string }) {
 
 export default function DashboardClient({
   profile, range, myAttendanceDays, myTotalEarnings, myScoutingCount,
-  myRank, myTotalPoints, todayAttendanceCount, todayAttendees, newMembersCount, colorGroups,
+  myRank, myTotalPoints, todayAttendanceCount, todayAttendees, newMembersCount,
   topEarners, groupEarnings, colorGroups, isAdmin, isEMOrBelow, settingsMap,
   topScoutsToday, groupScoutLeaderboard, consistentEarners,
 }: {
@@ -321,9 +320,6 @@ export default function DashboardClient({
           </div>
         )}
       </div>
-
-      {/* Leaderboard */}
-      <Leaderboard colorGroups={colorGroups ?? []} />
     </div>
   )
 }
