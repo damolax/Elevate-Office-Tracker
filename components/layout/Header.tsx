@@ -3,13 +3,11 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Menu, X, LayoutDashboard, Users, UserCheck, DollarSign, Search, Calendar, MessageSquare, Settings, QrCode, Group, LogOut } from 'lucide-react'
+import { Menu, X, Bell, LayoutDashboard, Users, UserCheck, DollarSign, Search, Calendar, MessageSquare, Settings, QrCode, Group, LogOut } from 'lucide-react'
 import type { Profile } from '@/lib/types'
 import { getStatusLabel, isSmOrAbove } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
-import NotificationBell from '@/components/notifications/NotificationBell'
-import { useLastSeen } from '@/lib/useLastSeen'
 
 const PAGE_TITLES: Record<string, string> = {
   '/dashboard': 'Dashboard',
@@ -28,7 +26,6 @@ export default function Header({ profile }: { profile: Profile }) {
   const pathname = usePathname()
   const router = useRouter()
   const [mobileOpen, setMobileOpen] = useState(false)
-  useLastSeen(profile.id) // ping last_seen every 4 minutes
   const isAdmin = profile.is_admin || profile.is_director
   const isSm = isSmOrAbove(profile.status)
 
@@ -48,7 +45,6 @@ export default function Header({ profile }: { profile: Profile }) {
     { href: '/team', label: 'My Team', icon: <Users size={18} /> },
     ...(isSm || isAdmin ? [{ href: '/group', label: 'My Group', icon: <Group size={18} /> }] : []),
     ...(isAdmin ? [{ href: '/people', label: 'People', icon: <UserCheck size={18} /> }] : []),
-    { href: '/earnings', label: 'Earnings', icon: <DollarSign size={18} /> },
     { href: '/money', label: 'Money Making', icon: <DollarSign size={18} /> },
     { href: '/scouting', label: 'Scouting', icon: <Search size={18} /> },
     { href: '/community', label: 'Community', icon: <MessageSquare size={18} /> },
@@ -70,12 +66,13 @@ export default function Header({ profile }: { profile: Profile }) {
         <h1 className="text-lg font-bold text-gray-900">{title}</h1>
 
         <div className="flex items-center gap-2">
-          <NotificationBell userId={profile.id} />
-          <Link href="/settings" className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold cursor-pointer hover:opacity-80 transition-opacity"
+          <div
+            className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold cursor-pointer"
             style={{ backgroundColor: profile.color_groups?.hex_color ?? '#4f46e5' }}
-            title={profile.full_name}>
-            {profile.full_name.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase()}
-          </Link>
+            title={profile.full_name}
+          >
+            {profile.full_name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
+          </div>
         </div>
       </header>
 
