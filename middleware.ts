@@ -36,6 +36,7 @@ export async function middleware(request: NextRequest) {
     path === '/signup' ||
     path === '/pending-approval' ||
     path.startsWith('/auth/') ||
+    path.startsWith('/scanner') ||
     path.startsWith('/attendance/scan') ||
     path.startsWith('/api/')
 
