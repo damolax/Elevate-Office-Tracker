@@ -264,4 +264,10 @@ export interface AppSettings {
   font_family: string
 }
 
+export function getStatusLabel(status) {
+  return STATUS_LABELS[status] ?? status
+}
 
+export function getStatusColor(status) {
+  return STATUS_COLORS[status] ?? 'bg-gray-100 text-gray-600'
+}
