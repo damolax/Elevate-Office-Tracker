@@ -21,10 +21,10 @@ function Avatar({ src, name, color, size = 'sm' }: { src?: string | null; name: 
   return (
     <div className={`${sizes[size]} rounded-full flex-shrink-0 overflow-hidden`}>
       {src ? (
-        <img src={src} alt={name} className="w-full h-full object-cover" />
+        <img src={src} alt={displayName} className="w-full h-full object-cover" />
       ) : (
         <div className="w-full h-full flex items-center justify-center text-white font-bold" style={{ backgroundColor: color ?? '#4f46e5' }}>
-          {name.slice(0, 1)}
+          {displayName.slice(0, 1)}
         </div>
       )}
     </div>
@@ -95,7 +95,7 @@ export default function DashboardClient({
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-xl font-extrabold text-gray-900">
-            Welcome back, {profile.full_name.split(' ')[0]} 👋
+            Welcome back, {firstName} 👋
           </h1>
           <p className="text-sm text-gray-400 mt-0.5">
             {myGroupName} · {getStatusLabel(profile.status)}{isGroupLeader ? ' · Group Leader' : ''}
