@@ -16,8 +16,9 @@ const RANGES = [
   { value: 'last_year', label: 'Last Year' },
 ]
 
-function Avatar({ src, name, color, size = 'sm' }: { src?: string | null; name: string; color?: string; size?: 'sm' | 'md' | 'lg' }) {
+function Avatar({ src, name, color, size = 'sm' }: { src?: string | null; name?: string | null; color?: string; size?: 'sm' | 'md' | 'lg' }) {
   const sizes = { sm: 'w-8 h-8 text-xs', md: 'w-10 h-10 text-sm', lg: 'w-12 h-12 text-base' }
+  const displayName = name?.trim() || '?'
   return (
     <div className={`${sizes[size]} rounded-full flex-shrink-0 overflow-hidden`}>
       {src ? (
@@ -84,6 +85,8 @@ export default function DashboardClient({
 
   const appName = settingsMap.app_name ?? 'Elevate Office'
   const myGroupName = profile.color_groups?.name ?? 'No Group'
+  const memberDisplayName = profile.full_name?.trim() || profile.member_id || 'Member'
+  const firstName = memberDisplayName.split(/\s+/)[0] || 'there'
   const isGroupLeader = profile.member_id?.endsWith('-001') ?? false
 
   const filteredConsistent = consistentEarners.filter(e => e.months >= 1)

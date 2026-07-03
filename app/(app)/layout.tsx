@@ -15,8 +15,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     .eq('id', user.id)
     .single()
 
-  if (!profile) redirect('/login')
-  if (!profile.approved && !profile.is_admin) redirect('/pending-approval')
+  if (!profile) redirect('/pending-approval')
+  if (!profile.approved && !profile.is_admin && !profile.is_director && !profile.is_co_admin) redirect('/pending-approval')
 
   return (
     <div className="flex h-screen overflow-hidden bg-gray-50">

@@ -13,8 +13,8 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
     .select('*, color_groups(*), sponsor:sponsor_id(id, full_name, member_id)')
     .eq('id', user.id)
     .single()
-  if (!profile) redirect('/login')
-  if (!profile.approved) redirect('/pending-approval')
+  if (!profile) redirect('/pending-approval')
+  if (!profile.approved && !profile.is_admin && !profile.is_director && !profile.is_co_admin) redirect('/pending-approval')
 
   const range = searchParams.range ?? 'this_month'
   const now = new Date()
