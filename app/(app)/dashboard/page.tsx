@@ -10,7 +10,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
 
   const { data: profile, error: profileError } = await supabase
     .from('profiles')
-    .select('*, color_groups(*), sponsor:sponsor_id(id, full_name, member_id)')
+    .select('*, color_groups!profiles_color_group_id_fkey(*), sponsor:sponsor_id(id, full_name, member_id)')
     .eq('id', user.id)
     .single()
 
@@ -82,14 +82,14 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
       .eq('user_id', user.id).eq('status', 'contacted'),
 
     supabase.from('attendance')
-      .select('user_id, profiles!inner(id, full_name, member_id, status, color_group_id, profile_picture, color_groups(name, hex_color))')
+      .select('user_id, profiles!inner(id, full_name, member_id, status, color_group_id, profile_picture, color_groups!profiles_color_group_id_fkey(name, hex_color))')
       .eq('date', todayStr).not('sign_in_time', 'is', null),
 
     supabase.from('color_groups').select('*').order('member_count', { ascending: false }),
 
     // Top 20 earners EM and below this month
     supabase.from('weekly_earnings')
-      .select('amount_usd, profiles!inner(id, full_name, member_id, status, profile_picture, color_groups(name, hex_color))')
+      .select('amount_usd, profiles!inner(id, full_name, member_id, status, profile_picture, color_groups!profiles_color_group_id_fkey(name, hex_color))')
       .gte('week_start', thisMonthStart).lte('week_start', thisMonthEnd)
       .in('profiles.status', ['member','distributor','manager','executive_manager']),
 
@@ -98,26 +98,26 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
 
     // Group earnings this month
     supabase.from('weekly_earnings')
-      .select('amount_usd, profiles!inner(color_group_id, color_groups(name, hex_color))')
+      .select('amount_usd, profiles!inner(color_group_id, color_groups!profiles_color_group_id_fkey(name, hex_color))')
       .gte('week_start', thisMonthStart).lte('week_start', thisMonthEnd),
 
     supabase.from('app_settings').select('key, value'),
 
     // Top scouts today (by contacted count)
     supabase.from('scouting_records')
-      .select('user_id, profiles!inner(id, full_name, member_id, profile_picture, color_groups(name, hex_color))')
+      .select('user_id, profiles!inner(id, full_name, member_id, profile_picture, color_groups!profiles_color_group_id_fkey(name, hex_color))')
       .eq('status', 'contacted')
       .gte('scouted_at', new Date(todayStr).toISOString())
       .lt('scouted_at', new Date(new Date(todayStr).getTime() + 864e5).toISOString()),
 
     // Scouting by color group (all time)
     supabase.from('scouting_records')
-      .select('user_id, profiles!inner(color_group_id, color_groups(name, hex_color))')
+      .select('user_id, profiles!inner(color_group_id, color_groups!profiles_color_group_id_fkey(name, hex_color))')
       .eq('status', 'contacted'),
 
     // Consistent earner points (top 20)
     supabase.from('earner_points')
-      .select('user_id, points, month_str, rank, amount_usd, profiles(id, full_name, member_id, profile_picture, color_groups(name, hex_color))')
+      .select('user_id, points, month_str, rank, amount_usd, profiles(id, full_name, member_id, profile_picture, color_groups!profiles_color_group_id_fkey(name, hex_color))')
       .order('month_str', { ascending: false }),
 
     // My own points

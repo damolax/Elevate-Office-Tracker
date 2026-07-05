@@ -8,12 +8,12 @@ export default async function CommunityPage() {
   if (!user) redirect('/login')
 
   const { data: profile } = await supabase
-    .from('profiles').select('*, color_groups(*)').eq('id', user.id).single()
+    .from('profiles').select('*, color_groups!profiles_color_group_id_fkey(*)').eq('id', user.id).single()
   if (!profile) redirect('/login')
 
   const { data: posts } = await supabase
     .from('community_posts')
-    .select('*, profiles(id, full_name, member_id, profile_picture, status, color_groups(name, hex_color))')
+    .select('*, profiles(id, full_name, member_id, profile_picture, status, color_groups!profiles_color_group_id_fkey(name, hex_color))')
     .order('created_at', { ascending: false })
     .limit(100)
 

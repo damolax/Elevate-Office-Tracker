@@ -48,7 +48,7 @@ export default function CommunityClient({
         // Fetch the full post with profile data
         const { data } = await supabase
           .from('community_posts')
-          .select('*, profiles(id, full_name, member_id, profile_picture, status, last_seen, color_groups(name, hex_color))')
+          .select('*, profiles(id, full_name, member_id, profile_picture, status, last_seen, color_groups!profiles_color_group_id_fkey(name, hex_color))')
           .eq('id', payload.new.id)
           .single()
 
@@ -107,7 +107,7 @@ export default function CommunityClient({
     const { data, error: insertError } = await supabase
       .from('community_posts')
       .insert({ user_id: profile.id, content: text })
-      .select('*, profiles(id, full_name, member_id, profile_picture, status, color_groups(name, hex_color))')
+      .select('*, profiles(id, full_name, member_id, profile_picture, status, color_groups!profiles_color_group_id_fkey(name, hex_color))')
       .single()
 
     if (insertError) {

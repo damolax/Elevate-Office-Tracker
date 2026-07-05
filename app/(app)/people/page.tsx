@@ -25,10 +25,10 @@ export default async function PeoplePage() {
     { data: colorGroups },
   ] = await Promise.all([
     supabase.from('profiles')
-      .select('*, color_groups(name, hex_color, code), sponsor:sponsor_id(id, full_name, member_id)')
+      .select('*, color_groups!profiles_color_group_id_fkey(name, hex_color, code), sponsor:sponsor_id(id, full_name, member_id)')
       .order('created_at', { ascending: false }),
     supabase.from('profiles')
-      .select('*, color_groups(name, hex_color), sponsor:sponsor_id(id, full_name, member_id)')
+      .select('*, color_groups!profiles_color_group_id_fkey(name, hex_color), sponsor:sponsor_id(id, full_name, member_id)')
       .eq('approved', false).eq('rejected', false)
       .order('created_at', { ascending: false }),
     supabase.from('color_groups').select('*').order('name'),

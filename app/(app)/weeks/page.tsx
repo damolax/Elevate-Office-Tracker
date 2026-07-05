@@ -10,7 +10,7 @@ export default async function WeeksPage() {
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('*, color_groups(*)')
+    .select('*, color_groups!profiles_color_group_id_fkey(*)')
     .eq('id', user.id)
     .single()
   if (!profile) redirect('/login')
@@ -64,7 +64,7 @@ export default async function WeeksPage() {
   if (isAdmin) {
     const { data: members } = await supabase
       .from('profiles')
-      .select('*, color_groups(name, hex_color)')
+      .select('*, color_groups!profiles_color_group_id_fkey(name, hex_color)')
       .in('status', ['member', 'distributor', 'manager'])
       .eq('approved', true)
       .order('week_number', { ascending: false })

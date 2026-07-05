@@ -11,7 +11,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   const { data: profile, error: profileError } = await supabase
     .from('profiles')
-    .select('*, color_groups(*)')
+    .select('*, color_groups!profiles_color_group_id_fkey(*)')
     .eq('id', user.id)
     .single()
 

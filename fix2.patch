@@ -1,0 +1,328 @@
+diff --git a/app/(app)/attendance/page.tsx b/app/(app)/attendance/page.tsx
+index 9a30dce..c602ef2 100644
+--- a/app/(app)/attendance/page.tsx
++++ b/app/(app)/attendance/page.tsx
+@@ -14,7 +14,7 @@ export default async function AttendancePage({
+ 
+   const { data: profile } = await supabase
+     .from('profiles')
+-    .select('*, color_groups(*)')
++    .select('*, color_groups!profiles_color_group_id_fkey(*)')
+     .eq('id', user.id)
+     .single()
+   if (!profile) redirect('/login')
+@@ -47,7 +47,7 @@ export default async function AttendancePage({
+   if (isAdmin) {
+     const { data } = await supabase
+       .from('attendance')
+-      .select('*, profiles!inner(id, full_name, member_id, status, color_group_id, color_groups(name, hex_color))')
++      .select('*, profiles!inner(id, full_name, member_id, status, color_group_id, color_groups!profiles_color_group_id_fkey(name, hex_color))')
+       .eq('date', selectedDate)
+       .not('sign_in_time', 'is', null)
+       .order('sign_in_time')
+diff --git a/app/(app)/community/CommunityClient.tsx b/app/(app)/community/CommunityClient.tsx
+index 9921fb6..f9d4a07 100644
+--- a/app/(app)/community/CommunityClient.tsx
++++ b/app/(app)/community/CommunityClient.tsx
+@@ -48,7 +48,7 @@ export default function CommunityClient({
+         // Fetch the full post with profile data
+         const { data } = await supabase
+           .from('community_posts')
+-          .select('*, profiles(id, full_name, member_id, profile_picture, status, last_seen, color_groups(name, hex_color))')
++          .select('*, profiles(id, full_name, member_id, profile_picture, status, last_seen, color_groups!profiles_color_group_id_fkey(name, hex_color))')
+           .eq('id', payload.new.id)
+           .single()
+ 
+@@ -107,7 +107,7 @@ export default function CommunityClient({
+     const { data, error: insertError } = await supabase
+       .from('community_posts')
+       .insert({ user_id: profile.id, content: text })
+-      .select('*, profiles(id, full_name, member_id, profile_picture, status, color_groups(name, hex_color))')
++      .select('*, profiles(id, full_name, member_id, profile_picture, status, color_groups!profiles_color_group_id_fkey(name, hex_color))')
+       .single()
+ 
+     if (insertError) {
+diff --git a/app/(app)/community/page.tsx b/app/(app)/community/page.tsx
+index 3d2c370..99a296e 100644
+--- a/app/(app)/community/page.tsx
++++ b/app/(app)/community/page.tsx
+@@ -8,12 +8,12 @@ export default async function CommunityPage() {
+   if (!user) redirect('/login')
+ 
+   const { data: profile } = await supabase
+-    .from('profiles').select('*, color_groups(*)').eq('id', user.id).single()
++    .from('profiles').select('*, color_groups!profiles_color_group_id_fkey(*)').eq('id', user.id).single()
+   if (!profile) redirect('/login')
+ 
+   const { data: posts } = await supabase
+     .from('community_posts')
+-    .select('*, profiles(id, full_name, member_id, profile_picture, status, color_groups(name, hex_color))')
++    .select('*, profiles(id, full_name, member_id, profile_picture, status, color_groups!profiles_color_group_id_fkey(name, hex_color))')
+     .order('created_at', { ascending: false })
+     .limit(100)
+ 
+diff --git a/app/(app)/dashboard/page.tsx b/app/(app)/dashboard/page.tsx
+index 7ea8a80..e8f6ab3 100644
+--- a/app/(app)/dashboard/page.tsx
++++ b/app/(app)/dashboard/page.tsx
+@@ -10,7 +10,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: {
+ 
+   const { data: profile, error: profileError } = await supabase
+     .from('profiles')
+-    .select('*, color_groups(*), sponsor:sponsor_id(id, full_name, member_id)')
++    .select('*, color_groups!profiles_color_group_id_fkey(*), sponsor:sponsor_id(id, full_name, member_id)')
+     .eq('id', user.id)
+     .single()
+ 
+@@ -82,14 +82,14 @@ export default async function DashboardPage({ searchParams }: { searchParams: {
+       .eq('user_id', user.id).eq('status', 'contacted'),
+ 
+     supabase.from('attendance')
+-      .select('user_id, profiles!inner(id, full_name, member_id, status, color_group_id, profile_picture, color_groups(name, hex_color))')
++      .select('user_id, profiles!inner(id, full_name, member_id, status, color_group_id, profile_picture, color_groups!profiles_color_group_id_fkey(name, hex_color))')
+       .eq('date', todayStr).not('sign_in_time', 'is', null),
+ 
+     supabase.from('color_groups').select('*').order('member_count', { ascending: false }),
+ 
+     // Top 20 earners EM and below this month
+     supabase.from('weekly_earnings')
+-      .select('amount_usd, profiles!inner(id, full_name, member_id, status, profile_picture, color_groups(name, hex_color))')
++      .select('amount_usd, profiles!inner(id, full_name, member_id, status, profile_picture, color_groups!profiles_color_group_id_fkey(name, hex_color))')
+       .gte('week_start', thisMonthStart).lte('week_start', thisMonthEnd)
+       .in('profiles.status', ['member','distributor','manager','executive_manager']),
+ 
+@@ -98,26 +98,26 @@ export default async function DashboardPage({ searchParams }: { searchParams: {
+ 
+     // Group earnings this month
+     supabase.from('weekly_earnings')
+-      .select('amount_usd, profiles!inner(color_group_id, color_groups(name, hex_color))')
++      .select('amount_usd, profiles!inner(color_group_id, color_groups!profiles_color_group_id_fkey(name, hex_color))')
+       .gte('week_start', thisMonthStart).lte('week_start', thisMonthEnd),
+ 
+     supabase.from('app_settings').select('key, value'),
+ 
+     // Top scouts today (by contacted count)
+     supabase.from('scouting_records')
+-      .select('user_id, profiles!inner(id, full_name, member_id, profile_picture, color_groups(name, hex_color))')
++      .select('user_id, profiles!inner(id, full_name, member_id, profile_picture, color_groups!profiles_color_group_id_fkey(name, hex_color))')
+       .eq('status', 'contacted')
+       .gte('scouted_at', new Date(todayStr).toISOString())
+       .lt('scouted_at', new Date(new Date(todayStr).getTime() + 864e5).toISOString()),
+ 
+     // Scouting by color group (all time)
+     supabase.from('scouting_records')
+-      .select('user_id, profiles!inner(color_group_id, color_groups(name, hex_color))')
++      .select('user_id, profiles!inner(color_group_id, color_groups!profiles_color_group_id_fkey(name, hex_color))')
+       .eq('status', 'contacted'),
+ 
+     // Consistent earner points (top 20)
+     supabase.from('earner_points')
+-      .select('user_id, points, month_str, rank, amount_usd, profiles(id, full_name, member_id, profile_picture, color_groups(name, hex_color))')
++      .select('user_id, points, month_str, rank, amount_usd, profiles(id, full_name, member_id, profile_picture, color_groups!profiles_color_group_id_fkey(name, hex_color))')
+       .order('month_str', { ascending: false }),
+ 
+     // My own points
+diff --git a/app/(app)/earnings/page.tsx b/app/(app)/earnings/page.tsx
+index 0183ac1..d91f358 100644
+--- a/app/(app)/earnings/page.tsx
++++ b/app/(app)/earnings/page.tsx
+@@ -11,7 +11,7 @@ export default async function EarningsPage() {
+   if (!user) redirect('/login')
+ 
+   const { data: profile } = await supabase
+-    .from('profiles').select('*, color_groups(*)').eq('id', user.id).single()
++    .from('profiles').select('*, color_groups!profiles_color_group_id_fkey(*)').eq('id', user.id).single()
+   if (!profile) redirect('/login')
+ 
+   const isAdmin = profile.is_admin || profile.is_director || profile.is_co_admin
+diff --git a/app/(app)/group/page.tsx b/app/(app)/group/page.tsx
+index cba0ffd..8a1ff4a 100644
+--- a/app/(app)/group/page.tsx
++++ b/app/(app)/group/page.tsx
+@@ -9,7 +9,7 @@ export default async function GroupPage() {
+   if (!user) redirect('/login')
+ 
+   const { data: profile } = await supabase
+-    .from('profiles').select('*, color_groups(*)').eq('id', user.id).single()
++    .from('profiles').select('*, color_groups!profiles_color_group_id_fkey(*)').eq('id', user.id).single()
+   if (!profile) redirect('/login')
+   if (!isSmOrAbove(profile.status) && !profile.is_admin && !profile.is_director) redirect('/dashboard')
+ 
+diff --git a/app/(app)/layout.tsx b/app/(app)/layout.tsx
+index 3deab3b..48320fe 100644
+--- a/app/(app)/layout.tsx
++++ b/app/(app)/layout.tsx
+@@ -11,7 +11,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
+ 
+   const { data: profile, error: profileError } = await supabase
+     .from('profiles')
+-    .select('*, color_groups(*)')
++    .select('*, color_groups!profiles_color_group_id_fkey(*)')
+     .eq('id', user.id)
+     .single()
+ 
+diff --git a/app/(app)/money/page.tsx b/app/(app)/money/page.tsx
+index 9e8a44a..06681e3 100644
+--- a/app/(app)/money/page.tsx
++++ b/app/(app)/money/page.tsx
+@@ -8,7 +8,7 @@ export default async function MoneyPage() {
+   if (!user) redirect('/login')
+ 
+   const { data: profile } = await supabase
+-    .from('profiles').select('*, color_groups(*)').eq('id', user.id).single()
++    .from('profiles').select('*, color_groups!profiles_color_group_id_fkey(*)').eq('id', user.id).single()
+   if (!profile) redirect('/login')
+ 
+   const isAdmin = profile.is_admin || profile.is_director
+@@ -27,7 +27,7 @@ export default async function MoneyPage() {
+ 
+     isAdmin
+       ? supabase.from('weekly_earnings')
+-          .select('*, profiles!inner(id, full_name, member_id, status, color_group_id, color_groups(name, hex_color, code))')
++          .select('*, profiles!inner(id, full_name, member_id, status, color_group_id, color_groups!profiles_color_group_id_fkey(name, hex_color, code))')
+           .in('profiles.status', ['member','distributor','manager','executive_manager'])
+           .order('week_start', { ascending: false })
+       : { data: [] },
+@@ -36,7 +36,7 @@ export default async function MoneyPage() {
+ 
+     isAdmin
+       ? supabase.from('profiles')
+-          .select('id, full_name, member_id, status, color_groups(name)')
++          .select('id, full_name, member_id, status, color_groups!profiles_color_group_id_fkey(name)')
+           .eq('approved', true)
+           .in('status', ['member','distributor','manager','executive_manager'])
+           .order('full_name')
+diff --git a/app/(app)/my-group/page.tsx b/app/(app)/my-group/page.tsx
+index f700884..af1a258 100644
+--- a/app/(app)/my-group/page.tsx
++++ b/app/(app)/my-group/page.tsx
+@@ -8,7 +8,7 @@ export default async function MyGroupPage() {
+   if (!user) redirect('/login')
+ 
+   const { data: profile } = await supabase
+-    .from('profiles').select('*, color_groups(*)').eq('id', user.id).single()
++    .from('profiles').select('*, color_groups!profiles_color_group_id_fkey(*)').eq('id', user.id).single()
+   if (!profile) redirect('/login')
+ 
+   // Only group leaders can access this page
+@@ -19,7 +19,7 @@ export default async function MyGroupPage() {
+   // Get all members in the same color group
+   const { data: groupMembers } = await supabase
+     .from('profiles')
+-    .select('*, color_groups(name, hex_color), sponsor:sponsor_id(id, full_name, member_id)')
++    .select('*, color_groups!profiles_color_group_id_fkey(name, hex_color), sponsor:sponsor_id(id, full_name, member_id)')
+     .eq('color_group_id', profile.color_group_id)
+     .eq('approved', true)
+     .neq('id', user.id)
+@@ -50,7 +50,7 @@ export default async function MyGroupPage() {
+ 
+   const { data: allProfiles } = await supabase
+     .from('profiles')
+-    .select('id, full_name, member_id, status, sponsor_id, profile_picture, color_groups(name, hex_color)')
++    .select('id, full_name, member_id, status, sponsor_id, profile_picture, color_groups!profiles_color_group_id_fkey(name, hex_color)')
+     .eq('approved', true)
+   const downlineIds = getDownline(user.id, allProfiles ?? [])
+   const myDownline = (allProfiles ?? []).filter(p => downlineIds.includes(p.id))
+diff --git a/app/(app)/people/page.tsx b/app/(app)/people/page.tsx
+index da98f12..0e3b3d3 100644
+--- a/app/(app)/people/page.tsx
++++ b/app/(app)/people/page.tsx
+@@ -25,10 +25,10 @@ export default async function PeoplePage() {
+     { data: colorGroups },
+   ] = await Promise.all([
+     supabase.from('profiles')
+-      .select('*, color_groups(name, hex_color, code), sponsor:sponsor_id(id, full_name, member_id)')
++      .select('*, color_groups!profiles_color_group_id_fkey(name, hex_color, code), sponsor:sponsor_id(id, full_name, member_id)')
+       .order('created_at', { ascending: false }),
+     supabase.from('profiles')
+-      .select('*, color_groups(name, hex_color), sponsor:sponsor_id(id, full_name, member_id)')
++      .select('*, color_groups!profiles_color_group_id_fkey(name, hex_color), sponsor:sponsor_id(id, full_name, member_id)')
+       .eq('approved', false).eq('rejected', false)
+       .order('created_at', { ascending: false }),
+     supabase.from('color_groups').select('*').order('name'),
+diff --git a/app/(app)/scouting/page.tsx b/app/(app)/scouting/page.tsx
+index d2d6071..7ddadc3 100644
+--- a/app/(app)/scouting/page.tsx
++++ b/app/(app)/scouting/page.tsx
+@@ -7,7 +7,7 @@ export default async function ScoutingPage() {
+   const { data: { user } } = await supabase.auth.getUser()
+   if (!user) redirect('/login')
+ 
+-  const { data: profile } = await supabase.from('profiles').select('*, color_groups(*)').eq('id', user.id).single()
++  const { data: profile } = await supabase.from('profiles').select('*, color_groups!profiles_color_group_id_fkey(*)').eq('id', user.id).single()
+   if (!profile) redirect('/login')
+ 
+   const isAdmin = profile.is_admin || profile.is_director
+@@ -25,14 +25,14 @@ export default async function ScoutingPage() {
+ 
+     isAdmin
+       ? supabase.from('scouting_records')
+-          .select('*, profiles!inner(id, full_name, member_id, color_group_id, color_groups(name, hex_color, code))')
++          .select('*, profiles!inner(id, full_name, member_id, color_group_id, color_groups!profiles_color_group_id_fkey(name, hex_color, code))')
+           .order('scouted_at', { ascending: false })
+           .limit(500)
+       : { data: null },
+ 
+     // Group scouting stats
+     supabase.from('scouting_records')
+-      .select('user_id, profiles!inner(color_group_id, color_groups(name, hex_color))'),
++      .select('user_id, profiles!inner(color_group_id, color_groups!profiles_color_group_id_fkey(name, hex_color))'),
+   ])
+ 
+   // Aggregate group stats
+diff --git a/app/(app)/settings/page.tsx b/app/(app)/settings/page.tsx
+index 92637ec..0ddac70 100644
+--- a/app/(app)/settings/page.tsx
++++ b/app/(app)/settings/page.tsx
+@@ -7,7 +7,7 @@ export default async function SettingsPage() {
+   const { data: { user } } = await supabase.auth.getUser()
+   if (!user) redirect('/login')
+ 
+-  const { data: profile } = await supabase.from('profiles').select('*, color_groups(*)').eq('id', user.id).single()
++  const { data: profile } = await supabase.from('profiles').select('*, color_groups!profiles_color_group_id_fkey(*)').eq('id', user.id).single()
+   if (!profile) redirect('/login')
+ 
+   const { data: settings } = await supabase.from('app_settings').select('*')
+diff --git a/app/(app)/team/page.tsx b/app/(app)/team/page.tsx
+index 44354f7..7520d74 100644
+--- a/app/(app)/team/page.tsx
++++ b/app/(app)/team/page.tsx
+@@ -10,14 +10,14 @@ export default async function TeamPage({ searchParams }: { searchParams: { filte
+   if (!user) redirect('/login')
+ 
+   const { data: profile } = await supabase
+-    .from('profiles').select('*, color_groups(*)').eq('id', user.id).single()
++    .from('profiles').select('*, color_groups!profiles_color_group_id_fkey(*)').eq('id', user.id).single()
+   if (!profile) redirect('/login')
+ 
+   const isAdmin = profile.is_admin || profile.is_director || profile.is_co_admin
+ 
+   const { data: allProfiles } = await supabase
+     .from('profiles')
+-    .select('*, color_groups(name, hex_color, code), sponsor:sponsor_id(id, full_name, member_id)')
++    .select('*, color_groups!profiles_color_group_id_fkey(name, hex_color, code), sponsor:sponsor_id(id, full_name, member_id)')
+     .eq('approved', true)
+     .order('full_name')
+ 
+diff --git a/app/(app)/weeks/page.tsx b/app/(app)/weeks/page.tsx
+index ea199cb..1f18466 100644
+--- a/app/(app)/weeks/page.tsx
++++ b/app/(app)/weeks/page.tsx
+@@ -10,7 +10,7 @@ export default async function WeeksPage() {
+ 
+   const { data: profile } = await supabase
+     .from('profiles')
+-    .select('*, color_groups(*)')
++    .select('*, color_groups!profiles_color_group_id_fkey(*)')
+     .eq('id', user.id)
+     .single()
+   if (!profile) redirect('/login')
+@@ -64,7 +64,7 @@ export default async function WeeksPage() {
+   if (isAdmin) {
+     const { data: members } = await supabase
+       .from('profiles')
+-      .select('*, color_groups(name, hex_color)')
++      .select('*, color_groups!profiles_color_group_id_fkey(name, hex_color)')
+       .in('status', ['member', 'distributor', 'manager'])
+       .eq('approved', true)
+       .order('week_number', { ascending: false })

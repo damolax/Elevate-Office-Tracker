@@ -10,14 +10,14 @@ export default async function TeamPage({ searchParams }: { searchParams: { filte
   if (!user) redirect('/login')
 
   const { data: profile } = await supabase
-    .from('profiles').select('*, color_groups(*)').eq('id', user.id).single()
+    .from('profiles').select('*, color_groups!profiles_color_group_id_fkey(*)').eq('id', user.id).single()
   if (!profile) redirect('/login')
 
   const isAdmin = profile.is_admin || profile.is_director || profile.is_co_admin
 
   const { data: allProfiles } = await supabase
     .from('profiles')
-    .select('*, color_groups(name, hex_color, code), sponsor:sponsor_id(id, full_name, member_id)')
+    .select('*, color_groups!profiles_color_group_id_fkey(name, hex_color, code), sponsor:sponsor_id(id, full_name, member_id)')
     .eq('approved', true)
     .order('full_name')
 

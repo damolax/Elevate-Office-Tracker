@@ -8,7 +8,7 @@ export default async function MoneyPage() {
   if (!user) redirect('/login')
 
   const { data: profile } = await supabase
-    .from('profiles').select('*, color_groups(*)').eq('id', user.id).single()
+    .from('profiles').select('*, color_groups!profiles_color_group_id_fkey(*)').eq('id', user.id).single()
   if (!profile) redirect('/login')
 
   const isAdmin = profile.is_admin || profile.is_director
@@ -27,7 +27,7 @@ export default async function MoneyPage() {
 
     isAdmin
       ? supabase.from('weekly_earnings')
-          .select('*, profiles!inner(id, full_name, member_id, status, color_group_id, color_groups(name, hex_color, code))')
+          .select('*, profiles!inner(id, full_name, member_id, status, color_group_id, color_groups!profiles_color_group_id_fkey(name, hex_color, code))')
           .in('profiles.status', ['member','distributor','manager','executive_manager'])
           .order('week_start', { ascending: false })
       : { data: [] },
@@ -36,7 +36,7 @@ export default async function MoneyPage() {
 
     isAdmin
       ? supabase.from('profiles')
-          .select('id, full_name, member_id, status, color_groups(name)')
+          .select('id, full_name, member_id, status, color_groups!profiles_color_group_id_fkey(name)')
           .eq('approved', true)
           .in('status', ['member','distributor','manager','executive_manager'])
           .order('full_name')

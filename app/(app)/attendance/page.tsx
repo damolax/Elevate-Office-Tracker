@@ -14,7 +14,7 @@ export default async function AttendancePage({
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('*, color_groups(*)')
+    .select('*, color_groups!profiles_color_group_id_fkey(*)')
     .eq('id', user.id)
     .single()
   if (!profile) redirect('/login')
@@ -47,7 +47,7 @@ export default async function AttendancePage({
   if (isAdmin) {
     const { data } = await supabase
       .from('attendance')
-      .select('*, profiles!inner(id, full_name, member_id, status, color_group_id, color_groups(name, hex_color))')
+      .select('*, profiles!inner(id, full_name, member_id, status, color_group_id, color_groups!profiles_color_group_id_fkey(name, hex_color))')
       .eq('date', selectedDate)
       .not('sign_in_time', 'is', null)
       .order('sign_in_time')

@@ -8,7 +8,7 @@ export default async function MyGroupPage() {
   if (!user) redirect('/login')
 
   const { data: profile } = await supabase
-    .from('profiles').select('*, color_groups(*)').eq('id', user.id).single()
+    .from('profiles').select('*, color_groups!profiles_color_group_id_fkey(*)').eq('id', user.id).single()
   if (!profile) redirect('/login')
 
   // Only group leaders can access this page
@@ -19,7 +19,7 @@ export default async function MyGroupPage() {
   // Get all members in the same color group
   const { data: groupMembers } = await supabase
     .from('profiles')
-    .select('*, color_groups(name, hex_color), sponsor:sponsor_id(id, full_name, member_id)')
+    .select('*, color_groups!profiles_color_group_id_fkey(name, hex_color), sponsor:sponsor_id(id, full_name, member_id)')
     .eq('color_group_id', profile.color_group_id)
     .eq('approved', true)
     .neq('id', user.id)
@@ -50,7 +50,7 @@ export default async function MyGroupPage() {
 
   const { data: allProfiles } = await supabase
     .from('profiles')
-    .select('id, full_name, member_id, status, sponsor_id, profile_picture, color_groups(name, hex_color)')
+    .select('id, full_name, member_id, status, sponsor_id, profile_picture, color_groups!profiles_color_group_id_fkey(name, hex_color)')
     .eq('approved', true)
   const downlineIds = getDownline(user.id, allProfiles ?? [])
   const myDownline = (allProfiles ?? []).filter(p => downlineIds.includes(p.id))

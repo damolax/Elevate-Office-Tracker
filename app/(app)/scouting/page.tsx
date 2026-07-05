@@ -7,7 +7,7 @@ export default async function ScoutingPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const { data: profile } = await supabase.from('profiles').select('*, color_groups(*)').eq('id', user.id).single()
+  const { data: profile } = await supabase.from('profiles').select('*, color_groups!profiles_color_group_id_fkey(*)').eq('id', user.id).single()
   if (!profile) redirect('/login')
 
   const isAdmin = profile.is_admin || profile.is_director
@@ -25,14 +25,14 @@ export default async function ScoutingPage() {
 
     isAdmin
       ? supabase.from('scouting_records')
-          .select('*, profiles!inner(id, full_name, member_id, color_group_id, color_groups(name, hex_color, code))')
+          .select('*, profiles!inner(id, full_name, member_id, color_group_id, color_groups!profiles_color_group_id_fkey(name, hex_color, code))')
           .order('scouted_at', { ascending: false })
           .limit(500)
       : { data: null },
 
     // Group scouting stats
     supabase.from('scouting_records')
-      .select('user_id, profiles!inner(color_group_id, color_groups(name, hex_color))'),
+      .select('user_id, profiles!inner(color_group_id, color_groups!profiles_color_group_id_fkey(name, hex_color))'),
   ])
 
   // Aggregate group stats
