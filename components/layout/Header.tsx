@@ -69,9 +69,9 @@ export default function Header({ profile }: { profile: Profile }) {
           <div
             className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold cursor-pointer"
             style={{ backgroundColor: profile.color_groups?.hex_color ?? '#4f46e5' }}
-            title={profile.full_name}
+            title={profile.full_name ?? ''}
           >
-            {profile.full_name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
+            {(profile.full_name ?? '?').split(' ').filter(Boolean).map(n => n[0]).join('').slice(0, 2).toUpperCase()}
           </div>
         </div>
       </header>

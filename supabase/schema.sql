@@ -564,3 +564,11 @@ begin
   end loop;
 end;
 $$ language plpgsql security definer;
+
+-- =============================================
+-- FIX: is_co_admin column (referenced throughout the app code
+-- but was missing from the schema — caused profile queries that
+-- explicitly select it, e.g. app/scanner/page.tsx, to error out).
+-- Safe to run multiple times.
+-- =============================================
+alter table profiles add column if not exists is_co_admin boolean not null default false;

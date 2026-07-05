@@ -75,10 +75,10 @@ export default function Sidebar({ profile }: { profile: Profile }) {
             className="w-9 h-9 rounded-full flex-shrink-0 flex items-center justify-center text-white text-sm font-bold"
             style={{ backgroundColor: profile.color_groups?.hex_color ?? '#4f46e5' }}
           >
-            {profile.full_name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
+            {(profile.full_name ?? '?').split(' ').filter(Boolean).map(n => n[0]).join('').slice(0, 2).toUpperCase()}
           </div>
           <div className="min-w-0">
-            <div className="text-sm font-semibold text-gray-900 truncate">{profile.full_name}</div>
+            <div className="text-sm font-semibold text-gray-900 truncate">{profile.full_name ?? 'Member'}</div>
             <div className="text-xs text-gray-400 flex items-center gap-1">
               <span>{profile.member_id ?? 'Pending ID'}</span>
               {profile.is_new_member && (

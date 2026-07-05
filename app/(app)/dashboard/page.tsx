@@ -8,11 +8,19 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const { data: profile } = await supabase
+  const { data: profile, error: profileError } = await supabase
     .from('profiles')
     .select('*, color_groups(*), sponsor:sponsor_id(id, full_name, member_id)')
     .eq('id', user.id)
     .single()
+
+  // PGRST116 = no row found. Any other error is a real query/DB problem,
+  // not "not yet approved" — don't mask it as pending-approval.
+  if (profileError && profileError.code !== 'PGRST116') {
+    console.error('DashboardPage profile query failed:', profileError)
+    throw new Error(`Failed to load profile: ${profileError.message}`)
+  }
+
   if (!profile) redirect('/pending-approval')
   if (!profile.approved && !profile.is_admin && !profile.is_director && !profile.is_co_admin) redirect('/pending-approval')
 
