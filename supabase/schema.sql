@@ -257,7 +257,7 @@ $$;
 create or replace function is_admin_or_director()
 returns boolean language sql security definer stable as $$
   select coalesce(
-    (select is_admin or is_director from profiles where id = auth.uid()),
+    (select is_admin or is_director or is_co_admin from profiles where id = auth.uid()),
     false
   );
 $$;
@@ -572,3 +572,72 @@ $$ language plpgsql security definer;
 -- Safe to run multiple times.
 -- =============================================
 alter table profiles add column if not exists is_co_admin boolean not null default false;
+
+-- =============================================
+-- FIX: group_leader_id column on color_groups (exists live but was
+-- missing from this schema file — documenting it here for consistency).
+-- =============================================
+alter table color_groups add column if not exists group_leader_id uuid references profiles(id);
+
+-- =============================================
+-- FEATURE: auto-create a color group when someone is promoted to
+-- Senior Manager (or above) and doesn't already lead one. They become
+-- the group's 001. No two Senior Managers ever share a color group
+-- (enforced already in app code for manual assignment; this covers
+-- the automatic case on promotion).
+-- =============================================
+create or replace function auto_create_sm_color_group()
+returns trigger language plpgsql as $$
+declare
+  v_base_code text;
+  v_code text;
+  v_suffix int := 0;
+  v_group_id uuid;
+  v_group_name text;
+  v_name_suffix int := 0;
+begin
+  if new.status in ('senior_manager','executive_manager','director')
+     and (old.status is distinct from new.status)
+     and old.status not in ('senior_manager','executive_manager','director') then
+
+    -- Skip if they already lead a color group
+    if exists (select 1 from color_groups where group_leader_id = new.id) then
+      return new;
+    end if;
+
+    v_base_code := upper(regexp_replace(coalesce(split_part(new.full_name, ' ', 1), 'GRP'), '[^a-zA-Z]', '', 'g'));
+    v_base_code := left(nullif(v_base_code, ''), 6);
+    if v_base_code is null then v_base_code := 'GRP'; end if;
+    v_code := v_base_code;
+    while exists (select 1 from color_groups where code = v_code) loop
+      v_suffix := v_suffix + 1;
+      v_code := v_base_code || v_suffix::text;
+    end loop;
+
+    v_group_name := new.full_name || '''s Group';
+    while exists (select 1 from color_groups where name = v_group_name) loop
+      v_name_suffix := v_name_suffix + 1;
+      v_group_name := new.full_name || '''s Group ' || v_name_suffix::text;
+    end loop;
+
+    insert into color_groups (name, code, hex_color, group_leader_id)
+    values (v_group_name, v_code, '#' || substr(md5(random()::text), 1, 6), new.id)
+    returning id into v_group_id;
+
+    insert into member_id_sequences (color_code, next_number) values (v_code, 2)
+    on conflict (color_code) do nothing;
+
+    new.color_group_id := v_group_id;
+    if new.member_id is null then
+      new.member_id := v_code || '001';
+    end if;
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_auto_create_sm_color_group on profiles;
+create trigger trg_auto_create_sm_color_group
+before update on profiles
+for each row execute function auto_create_sm_color_group();

@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, subMonths } from 'date-fns'
+import { computeTeam, isSeniorManagerOrAbove } from '@/lib/types'
 import DashboardClient from './DashboardClient'
 
 export default async function DashboardPage({ searchParams }: { searchParams: { range?: string } }) {
@@ -71,6 +72,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
     { data: groupScouts },
     { data: consistentPoints },
     { data: myPoints },
+    { data: allProfilesForTeam },
   ] = await Promise.all([
     supabase.from('attendance').select('date').eq('user_id', user.id)
       .gte('date', rangeStart).lte('date', rangeEnd).not('sign_in_time', 'is', null),
@@ -123,6 +125,11 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
     // My own points
     supabase.from('earner_points')
       .select('points, month_str, rank').eq('user_id', user.id),
+
+    // All approved profiles (for team-starts computation)
+    supabase.from('profiles')
+      .select('id, sponsor_id, status, is_new_member, new_member_month')
+      .eq('approved', true),
   ])
 
   // Aggregate top earners
@@ -185,6 +192,20 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
 
   const settingsMap = Object.fromEntries((settings ?? []).map(s => [s.key, s.value]))
 
+  // Members Start This Month: people you directly sponsored who just started this month
+  const allTeamProfiles = allProfilesForTeam ?? []
+  const memberStartsThisMonth = allTeamProfiles.filter(
+    p => p.sponsor_id === user.id && p.is_new_member && p.new_member_month === thisMonthStr
+  ).length
+
+  // Team Starts / SM Team Starts: everyone in your downline up to (not including) the
+  // next Senior Manager boundary — same rule for members and Senior Managers alike.
+  const isSMOrAbove = isSeniorManagerOrAbove(profile.status)
+  const myTeamIds = computeTeam(user.id, 'senior_manager' as any, allTeamProfiles as any)
+  const teamStartsThisMonth = allTeamProfiles.filter(
+    p => myTeamIds.includes(p.id) && p.is_new_member && p.new_member_month === thisMonthStr
+  ).length
+
   return (
     <DashboardClient
       profile={profile}
@@ -206,6 +227,9 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
       topScoutsToday={topScoutsToday}
       groupScoutLeaderboard={groupScoutLeaderboard}
       consistentEarners={consistentEarners}
+      memberStartsThisMonth={memberStartsThisMonth}
+      teamStartsThisMonth={teamStartsThisMonth}
+      isSMOrAbove={isSMOrAbove}
     />
   )
 }

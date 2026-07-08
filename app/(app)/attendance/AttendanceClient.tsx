@@ -9,7 +9,7 @@ import { Clock, CheckCircle, QrCode, ExternalLink } from 'lucide-react'
 import QRCodeDisplay from '@/components/attendance/QRCodeDisplay'
 
 export default function AttendanceClient({
-  profile, isAdmin, myMonthAttendance, todayRecord, selectedDate, dateAttendance,
+  profile, isAdmin, myMonthAttendance, todayRecord, selectedDate, dateAttendance, allApprovedProfiles,
 }: {
   profile: Profile
   isAdmin: boolean
@@ -17,11 +17,43 @@ export default function AttendanceClient({
   todayRecord: Attendance | null
   selectedDate: string
   dateAttendance: (Attendance & { profiles: { full_name: string; member_id: string; status: string; color_groups: { name: string; hex_color: string } } })[]
+  allApprovedProfiles: { id: string; full_name: string; member_id: string | null }[]
 }) {
   const [tab, setTab] = useState<'me' | 'qr' | 'office' | 'scanner-link'>('me')
+  const [manualUserId, setManualUserId] = useState('')
+  const [manualSignIn, setManualSignIn] = useState('09:00')
+  const [manualSignOut, setManualSignOut] = useState('')
+  const [manualLoading, setManualLoading] = useState(false)
+  const [manualMsg, setManualMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const today = format(new Date(), 'yyyy-MM-dd')
   const hasSigned = !!todayRecord?.sign_in_time
   const hasSignedOut = !!todayRecord?.sign_out_time
+
+  async function submitManualAttendance() {
+    if (!manualUserId) {
+      setManualMsg({ type: 'error', text: 'Pick a person first.' })
+      return
+    }
+    setManualLoading(true)
+    setManualMsg(null)
+    const supabase = createClient()
+    const signInIso = manualSignIn ? new Date(`${selectedDate}T${manualSignIn}:00`).toISOString() : null
+    const signOutIso = manualSignOut ? new Date(`${selectedDate}T${manualSignOut}:00`).toISOString() : null
+    const { error } = await supabase.from('attendance').upsert({
+      user_id: manualUserId,
+      date: selectedDate,
+      is_night_session: false,
+      sign_in_time: signInIso,
+      sign_out_time: signOutIso,
+    }, { onConflict: 'user_id,date,is_night_session' })
+    setManualLoading(false)
+    if (error) {
+      setManualMsg({ type: 'error', text: error.message })
+      return
+    }
+    setManualMsg({ type: 'success', text: 'Attendance saved.' })
+    setTimeout(() => window.location.reload(), 800)
+  }
 
   const TABS = [
     { id: 'me', label: 'My Attendance' },
@@ -136,6 +168,32 @@ export default function AttendanceClient({
           <p className="text-sm text-gray-500 mb-4">
             {dateAttendance.length} people signed in on {format(parseISO(selectedDate), 'EEEE, MMMM d, yyyy')}
           </p>
+
+          {/* Manual entry — for forgotten sign-ins on past (or current) dates */}
+          <div className="border border-gray-200 rounded-lg p-4 mb-5 bg-gray-50">
+            <p className="text-xs font-semibold text-gray-500 mb-2 uppercase tracking-wide">Manual Entry / Edit</p>
+            <div className="flex flex-wrap gap-2 items-center">
+              <select className="input w-auto" value={manualUserId} onChange={e => setManualUserId(e.target.value)}>
+                <option value="">Select person…</option>
+                {allApprovedProfiles.map(p => (
+                  <option key={p.id} value={p.id}>{p.full_name} {p.member_id ? `(${p.member_id})` : ''}</option>
+                ))}
+              </select>
+              <label className="text-xs text-gray-500">Sign in
+                <input type="time" className="input w-auto ml-1" value={manualSignIn} onChange={e => setManualSignIn(e.target.value)} />
+              </label>
+              <label className="text-xs text-gray-500">Sign out
+                <input type="time" className="input w-auto ml-1" value={manualSignOut} onChange={e => setManualSignOut(e.target.value)} />
+              </label>
+              <button className="btn-primary text-sm" disabled={manualLoading} onClick={submitManualAttendance}>
+                {manualLoading ? 'Saving…' : `Save for ${format(parseISO(selectedDate), 'MMM d')}`}
+              </button>
+            </div>
+            {manualMsg && (
+              <p className={`text-xs mt-2 ${manualMsg.type === 'success' ? 'text-green-600' : 'text-red-600'}`}>{manualMsg.text}</p>
+            )}
+            <p className="text-xs text-gray-400 mt-2">Use this to fix a forgotten sign-in/out for the date selected above.</p>
+          </div>
           {dateAttendance.length === 0 ? (
             <p className="text-gray-400 text-sm text-center py-8">No attendance for this date</p>
           ) : (

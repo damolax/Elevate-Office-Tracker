@@ -39,10 +39,13 @@ export default function PeopleClient({
   const isDirector = currentProfile.is_director && !isMainAdmin
   const isCoAdmin = currentProfile.is_co_admin && !isMainAdmin && !currentProfile.is_director
 
-  // Hide main admin from directors
-  const visibleProfiles = isMainAdmin
-    ? allProfiles
-    : allProfiles.filter(p => p.id !== mainAdminId)
+  // Hide main admin from everyone but main admin; hide Directors from Co-Admins
+  // (no one can view or edit someone above them in the hierarchy)
+  const visibleProfiles = allProfiles.filter(p => {
+    if (!isMainAdmin && p.id === mainAdminId) return false
+    if (isCoAdmin && p.is_director) return false
+    return true
+  })
 
   // Active vs inactive split
   const activeProfiles = visibleProfiles.filter(p => p.approved && !p.rejected && p.activity_status === 'active')

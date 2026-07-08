@@ -44,6 +44,7 @@ export default async function AttendancePage({
 
   // Office view — admin/director/co-admin only
   let dateAttendance: unknown[] = []
+  let allApprovedProfiles: { id: string; full_name: string; member_id: string | null }[] = []
   if (isAdmin) {
     const { data } = await supabase
       .from('attendance')
@@ -52,6 +53,13 @@ export default async function AttendancePage({
       .not('sign_in_time', 'is', null)
       .order('sign_in_time')
     dateAttendance = data ?? []
+
+    const { data: people } = await supabase
+      .from('profiles')
+      .select('id, full_name, member_id')
+      .eq('approved', true)
+      .order('full_name')
+    allApprovedProfiles = people ?? []
   }
 
   return (
@@ -62,6 +70,7 @@ export default async function AttendancePage({
       todayRecord={todayRecord}
       selectedDate={selectedDate}
       dateAttendance={dateAttendance as any[]}
+      allApprovedProfiles={allApprovedProfiles}
     />
   )
 }

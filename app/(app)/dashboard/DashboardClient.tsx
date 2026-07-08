@@ -69,6 +69,7 @@ export default function DashboardClient({
   myRank, myTotalPoints, todayAttendanceCount, todayAttendees, newMembersCount,
   topEarners, groupEarnings, colorGroups, isAdmin, isEMOrBelow, settingsMap,
   topScoutsToday, groupScoutLeaderboard, consistentEarners,
+  memberStartsThisMonth, teamStartsThisMonth, isSMOrAbove,
 }: {
   profile: Profile; range: string
   myAttendanceDays: number; myTotalEarnings: number; myScoutingCount: number
@@ -79,6 +80,7 @@ export default function DashboardClient({
   colorGroups: ColorGroup[]; isAdmin: boolean; isEMOrBelow: boolean
   settingsMap: Record<string, string>
   topScoutsToday: any[]; groupScoutLeaderboard: any[]; consistentEarners: any[]
+  memberStartsThisMonth: number; teamStartsThisMonth: number; isSMOrAbove: boolean
 }) {
   const router = useRouter()
   const [consistentRange, setConsistentRange] = useState<number>(6) // months
@@ -89,6 +91,7 @@ export default function DashboardClient({
   const firstName = memberDisplayName.split(/\s+/)[0] || 'there'
   const isGroupLeader = profile.member_id?.endsWith('-001') ?? false
 
+  const rangeLabel = (RANGES.find(r => r.value === range)?.label ?? 'This Month').toLowerCase()
   const filteredConsistent = consistentEarners.filter(e => e.months >= 1)
 
   return (
@@ -116,9 +119,11 @@ export default function DashboardClient({
 
       {/* My stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 stagger-children">
-        <StatCard label="Days Present" value={myAttendanceDays} sub="in selected range" icon={<Calendar size={18} />} color="brand" delay={0} />
-        <StatCard label="My Earnings" value={formatCurrency(myTotalEarnings)} sub="in selected range" icon={<TrendingUp size={18} />} color="green" delay={50} />
+        <StatCard label="Days Present" value={myAttendanceDays} sub={rangeLabel} icon={<Calendar size={18} />} color="brand" delay={0} />
+        <StatCard label="My Earnings" value={formatCurrency(myTotalEarnings)} sub={rangeLabel} icon={<TrendingUp size={18} />} color="green" delay={50} />
         <StatCard label="Businesses Scouted" value={myScoutingCount} sub="total contacted" icon={<Target size={18} />} color="amber" delay={100} />
+        <StatCard label="Members Start" value={memberStartsThisMonth} sub="this month · direct" icon={<Zap size={18} />} color="blue" delay={125} />
+        <StatCard label={isSMOrAbove ? 'SM Team Starts' : 'Team Starts'} value={teamStartsThisMonth} sub="this month" icon={<Users size={18} />} color="purple" delay={140} />
         {isEMOrBelow && myRank > 0 && <StatCard label="My Rank" value={`#${myRank}`} sub="this month" icon={<Award size={18} />} color="purple" delay={150} />}
         {isEMOrBelow && <StatCard label="Consistency Points" value={myTotalPoints} sub="all time" icon={<Star size={18} />} color="blue" delay={200} />}
       </div>

@@ -3,7 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 
 export async function POST(request: Request) {
   try {
-    const { user_id, updates } = await request.json()
+    const { user_id, updates, actor_id } = await request.json()
 
     if (!user_id || !updates) {
       return NextResponse.json({ error: 'Missing user_id or updates' }, { status: 400 })
@@ -15,6 +15,32 @@ export async function POST(request: Request) {
     const supabase = createClient(supabaseUrl, serviceKey, {
       auth: { persistSession: false, autoRefreshToken: false },
     })
+
+    // Enforce the hierarchy server-side: no one may edit someone above them.
+    // (Co-admins can't touch Directors or the main Admin; Directors can't touch the main Admin.)
+    if (actor_id) {
+      const { data: actor } = await supabase
+        .from('profiles')
+        .select('is_admin, is_director, is_co_admin')
+        .eq('id', actor_id)
+        .single()
+      const { data: target } = await supabase
+        .from('profiles')
+        .select('is_admin, is_director')
+        .eq('id', user_id)
+        .single()
+
+      if (actor && target && !actor.is_admin) {
+        const actorIsDirector = actor.is_director
+        const actorIsCoAdminOnly = actor.is_co_admin && !actor.is_director
+        if (target.is_admin) {
+          return NextResponse.json({ error: 'You cannot edit the main Admin.' }, { status: 403 })
+        }
+        if (actorIsCoAdminOnly && target.is_director) {
+          return NextResponse.json({ error: 'Co-Admins cannot edit Directors.' }, { status: 403 })
+        }
+      }
+    }
 
     const { data, error } = await supabase
       .from('profiles')
