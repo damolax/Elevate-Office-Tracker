@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, subMonths } from 'date-fns'
-import { computeTeam, isSeniorManagerOrAbove } from '@/lib/types'
+import { computeTeam, isSmOrAbove } from '@/lib/types'
 import DashboardClient from './DashboardClient'
 
 export default async function DashboardPage({ searchParams }: { searchParams: { range?: string } }) {
@@ -200,7 +200,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
 
   // Team Starts / SM Team Starts: everyone in your downline up to (not including) the
   // next Senior Manager boundary — same rule for members and Senior Managers alike.
-  const isSMOrAbove = isSeniorManagerOrAbove(profile.status)
+  const isSMOrAbove = isSmOrAbove(profile.status)
   const myTeamIds = computeTeam(user.id, 'senior_manager' as any, allTeamProfiles as any)
   const teamStartsThisMonth = allTeamProfiles.filter(
     p => myTeamIds.includes(p.id) && p.is_new_member && p.new_member_month === thisMonthStr
