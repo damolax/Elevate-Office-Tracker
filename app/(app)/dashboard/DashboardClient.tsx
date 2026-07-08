@@ -68,7 +68,7 @@ export default function DashboardClient({
   profile, range, myAttendanceDays, myTotalEarnings, myScoutingCount,
   myRank, myTotalPoints, todayAttendanceCount, todayAttendees, newMembersCount,
   topEarners, groupEarnings, colorGroups, isAdmin, isEMOrBelow, settingsMap,
-  topScoutsToday, groupScoutLeaderboard, consistentEarners,
+  topScoutsToday, groupScoutLeaderboard, consistentEarners, topPunctuality,
   memberStartsThisMonth, teamStartsThisMonth, isSMOrAbove,
 }: {
   profile: Profile; range: string
@@ -79,7 +79,7 @@ export default function DashboardClient({
   topEarners: any[]; groupEarnings: any[]
   colorGroups: ColorGroup[]; isAdmin: boolean; isEMOrBelow: boolean
   settingsMap: Record<string, string>
-  topScoutsToday: any[]; groupScoutLeaderboard: any[]; consistentEarners: any[]
+  topScoutsToday: any[]; groupScoutLeaderboard: any[]; consistentEarners: any[]; topPunctuality: any[]
   memberStartsThisMonth: number; teamStartsThisMonth: number; isSMOrAbove: boolean
 }) {
   const router = useRouter()
@@ -284,6 +284,54 @@ export default function DashboardClient({
                       </td>
                       <td className="table-td font-extrabold text-brand-600">{e.totalPoints} pts</td>
                       <td className="table-td hidden sm:table-cell text-gray-400">{e.months} month{e.months !== 1 ? 's' : ''}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
+        {/* TOP PUNCTUALITY LEADERBOARD */}
+        <div className="card p-5 animate-slide-up">
+          <SectionHeader title="⏰ Top 20 Punctuality" sub={`Earliest average sign-in time · ${rangeLabel}`} />
+          {topPunctuality.length === 0 ? (
+            <p className="text-sm text-gray-400 text-center py-8">No sign-ins recorded {rangeLabel} yet.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead><tr className="border-b border-gray-100">
+                  <th className="table-th w-10">#</th>
+                  <th className="table-th">Member</th>
+                  <th className="table-th hidden sm:table-cell">Group</th>
+                  <th className="table-th">Avg. Ahead of Window</th>
+                  <th className="table-th hidden sm:table-cell">Days</th>
+                </tr></thead>
+                <tbody>
+                  {topPunctuality.map((e, i) => (
+                    <tr key={e.id} className={`table-row ${e.id === profile.id ? 'bg-brand-50' : ''}`}>
+                      <td className="table-td">
+                        <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${i === 0 ? 'bg-yellow-100 text-yellow-700' : i === 1 ? 'bg-gray-100 text-gray-600' : i === 2 ? 'bg-orange-100 text-orange-700' : 'bg-gray-50 text-gray-400'}`}>{i+1}</div>
+                      </td>
+                      <td className="table-td">
+                        <div className="flex items-center gap-2">
+                          <Avatar src={e.profile_picture} name={e.full_name} color={e.group_color} size="sm" />
+                          <div>
+                            <div className="font-medium text-gray-900">{e.full_name} {e.id === profile.id && <span className="text-brand-500 text-xs">(You)</span>}</div>
+                            <div className="text-xs text-gray-400">{e.member_id}</div>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="table-td hidden sm:table-cell">
+                        <div className="flex items-center gap-1.5">
+                          <div className="w-3 h-3 rounded-full" style={{ backgroundColor: e.group_color }} />
+                          <span className="text-gray-500">{e.group_name}</span>
+                        </div>
+                      </td>
+                      <td className="table-td font-extrabold text-brand-600">
+                        {e.avgMinutesEarly >= 0 ? `${e.avgMinutesEarly} min early` : `${Math.abs(e.avgMinutesEarly)} min late`}
+                      </td>
+                      <td className="table-td hidden sm:table-cell text-gray-400">{e.days} day{e.days !== 1 ? 's' : ''}</td>
                     </tr>
                   ))}
                 </tbody>

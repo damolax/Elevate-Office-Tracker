@@ -4,6 +4,7 @@ import type { Profile } from '@/lib/types'
 import { getStatusLabel, getStatusColor } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 
 export default function GroupClient({
   profile, groupMembers, scoutingByMember, totalGroupScouting,
@@ -13,6 +14,7 @@ export default function GroupClient({
   scoutingByMember: Record<string, number>
   totalGroupScouting: number
 }) {
+  const router = useRouter()
   const [taskForm, setTaskForm] = useState({ title: '', description: '', assignee: '', due_date: '' })
   const [taskMsg, setTaskMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const [loading, setLoading] = useState(false)
@@ -88,8 +90,10 @@ export default function GroupClient({
             {groupMembers.map(m => (
               <tr key={m.id} className="table-row">
                 <td className="table-td">
-                  <div className="font-medium">{m.full_name}</div>
-                  {m.is_new_member && <span className="badge bg-brand-100 text-brand-700 text-xs">NEW</span>}
+                  <button className="font-medium text-brand-600 hover:text-brand-700 hover:underline text-left" onClick={() => router.push(`/member/${m.id}`)}>
+                    {m.full_name}
+                  </button>
+                  {m.is_new_member && <span className="badge bg-brand-100 text-brand-700 text-xs ml-1.5">NEW</span>}
                 </td>
                 <td className="table-td text-gray-400">{m.member_id ?? '—'}</td>
                 <td className="table-td"><span className={`badge ${getStatusColor(m.status)}`}>{getStatusLabel(m.status)}</span></td>

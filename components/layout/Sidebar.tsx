@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard, Users, UserCheck, DollarSign, Search,
-  Calendar, MessageSquare, Settings, QrCode, Group, LogOut, ChevronRight, Flag, GraduationCap, Crown
+  Calendar, MessageSquare, Settings, QrCode, Group, LogOut, ChevronRight, Flag, GraduationCap
 } from 'lucide-react'
 import type { Profile } from '@/lib/types'
 import { isSmOrAbove, getStatusLabel } from '@/lib/utils'
@@ -29,9 +29,8 @@ export default function Sidebar({ profile }: { profile: Profile }) {
     { href: '/dashboard', label: 'Dashboard', icon: <LayoutDashboard size={18} /> },
     { href: '/attendance', label: 'Attendance', icon: <QrCode size={18} /> },
     { href: '/weeks', label: '12-Week Program', icon: <GraduationCap size={18} /> },
-    ...(profile.member_id?.endsWith('-001') || profile.is_admin ? [{ href: '/my-group', label: 'My Group', icon: <Crown size={18} /> }] : []),
     { href: '/team', label: 'My Team', icon: <Users size={18} /> },
-    { href: '/group', label: 'My Group', icon: <Group size={18} />, smOnly: true },
+    { href: '/group', label: 'My Group', icon: <Group size={18} /> },
     { href: '/people', label: 'People', icon: <UserCheck size={18} />, adminOnly: true },
     { href: '/money', label: 'Money Making', icon: <DollarSign size={18} /> },
     { href: '/scouting', label: 'Scouting', icon: <Search size={18} /> },

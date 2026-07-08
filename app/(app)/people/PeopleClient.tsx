@@ -223,7 +223,9 @@ export default function PeopleClient({
               : <div className="w-12 h-12 rounded-full flex items-center justify-center font-bold text-lg text-white" style={{ backgroundColor: colorGroup?.hex_color ?? '#6366f1' }}>{p.full_name.charAt(0)}</div>
             }
             <div>
-              <div className="font-bold text-gray-900">{p.full_name}</div>
+              <button className="font-bold text-gray-900 hover:text-brand-600 hover:underline text-left" onClick={() => window.open(`/member/${p.id}`, '_blank')}>
+                {p.full_name}
+              </button>
               <div className="text-sm text-gray-400">{p.member_id ?? 'No ID'} · {p.email}</div>
               <div className="flex gap-1.5 mt-1 flex-wrap">
                 <span className={`badge ${getStatusColor(p.status)}`}>{getStatusLabel(p.status)}</span>

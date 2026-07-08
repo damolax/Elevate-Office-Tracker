@@ -158,17 +158,24 @@ export default function TeamClient({
           {selectedMember ? (
             <>
               <div className="card p-5">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-lg"
-                    style={{ backgroundColor: (selectedMember as any).color_groups?.hex_color ?? '#6366f1' }}>
-                    {selectedMember.full_name.charAt(0)}
-                  </div>
-                  <div>
-                    <div className="font-bold text-gray-900">{selectedMember.full_name}</div>
-                    <div className="text-xs text-gray-400">{selectedMember.member_id}</div>
-                    <span className={`badge text-xs mt-1 ${getStatusColor(selectedMember.status)}`}>{getStatusLabel(selectedMember.status)}</span>
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-lg"
+                      style={{ backgroundColor: (selectedMember as any).color_groups?.hex_color ?? '#6366f1' }}>
+                      {selectedMember.full_name.charAt(0)}
+                    </div>
+                    <div>
+                      <div className="font-bold text-gray-900">{selectedMember.full_name}</div>
+                      <div className="text-xs text-gray-400">{selectedMember.member_id}</div>
+                      <span className={`badge text-xs mt-1 ${getStatusColor(selectedMember.status)}`}>{getStatusLabel(selectedMember.status)}</span>
+                    </div>
                   </div>
                 </div>
+                <button
+                  className="w-full text-center text-xs font-semibold text-brand-600 hover:text-brand-700 bg-brand-50 rounded-lg py-2 mb-3"
+                  onClick={() => router.push(`/member/${selectedMember.id}`)}>
+                  View Full Profile →
+                </button>
                 <div className="text-xs text-gray-500 space-y-1">
                   <div>Week: {selectedMember.week_number ?? '—'}</div>
                   <div>Group: {(selectedMember as any).color_groups?.name ?? '—'}</div>

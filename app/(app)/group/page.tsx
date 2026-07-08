@@ -1,6 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
-import { isSmOrAbove } from '@/lib/utils'
 import GroupClient from './GroupClient'
 
 export default async function GroupPage() {
@@ -11,7 +10,7 @@ export default async function GroupPage() {
   const { data: profile } = await supabase
     .from('profiles').select('*, color_groups!profiles_color_group_id_fkey(*)').eq('id', user.id).single()
   if (!profile) redirect('/login')
-  if (!isSmOrAbove(profile.status) && !profile.is_admin && !profile.is_director) redirect('/dashboard')
+  if (!profile.color_group_id) redirect('/dashboard')
 
   const { data: groupMembers } = await supabase
     .from('profiles')

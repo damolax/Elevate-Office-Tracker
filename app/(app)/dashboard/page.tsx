@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, subMonths } from 'date-fns'
-import { computeTeam, isSmOrAbove } from '@/lib/types'
+import { computeTeam, isSmOrAbove, ATTENDANCE_RULES } from '@/lib/types'
 import DashboardClient from './DashboardClient'
 
 export default async function DashboardPage({ searchParams }: { searchParams: { range?: string } }) {
@@ -73,6 +73,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
     { data: consistentPoints },
     { data: myPoints },
     { data: allProfilesForTeam },
+    { data: punctualityRaw },
   ] = await Promise.all([
     supabase.from('attendance').select('date').eq('user_id', user.id)
       .gte('date', rangeStart).lte('date', rangeEnd).not('sign_in_time', 'is', null),
@@ -130,6 +131,13 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
     supabase.from('profiles')
       .select('id, sponsor_id, status, is_new_member, new_member_month')
       .eq('approved', true),
+
+    // Sign-in times in range, for Top Punctuality
+    supabase.from('attendance')
+      .select('user_id, date, sign_in_time, is_night_session, profiles!inner(id, full_name, member_id, profile_picture, color_groups!profiles_color_group_id_fkey(name, hex_color))')
+      .gte('date', rangeStart).lte('date', rangeEnd)
+      .not('sign_in_time', 'is', null)
+      .eq('is_night_session', false),
   ])
 
   // Aggregate top earners
@@ -188,6 +196,33 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
     pointsMap.set(p.id, ex)
   }
   const consistentEarners = Array.from(pointsMap.values()).sort((a, b) => b.totalPoints - a.totalPoints).slice(0, 20)
+
+  // Top Punctuality: average minutes ahead of the sign-in window opening.
+  // Higher = earlier/more punctual. Only counts day-session sign-ins.
+  const punctualityMap = new Map<string, { id: string; full_name: string; member_id: string; profile_picture: string | null; group_name: string; group_color: string; totalMinutesEarly: number; days: number }>()
+  for (const r of (punctualityRaw ?? [])) {
+    const p = (r as any).profiles
+    if (!p) continue
+    const signIn = new Date(r.sign_in_time as string)
+    const dayOfWeek = new Date(r.date + 'T00:00:00').getDay() // 0=Sun..5=Fri..6=Sat
+    const rule = dayOfWeek === 5 ? ATTENDANCE_RULES.friday : ATTENDANCE_RULES.weekday
+    const [openH, openM] = rule.sign_in_open.split(':').map(Number)
+    const windowOpen = new Date(signIn)
+    windowOpen.setHours(openH, openM, 0, 0)
+    const minutesEarly = (windowOpen.getTime() - signIn.getTime()) / 60000
+    const ex = punctualityMap.get(p.id) ?? {
+      id: p.id, full_name: p.full_name, member_id: p.member_id, profile_picture: p.profile_picture,
+      group_name: p.color_groups?.name ?? '—', group_color: p.color_groups?.hex_color ?? '#999',
+      totalMinutesEarly: 0, days: 0,
+    }
+    ex.totalMinutesEarly += minutesEarly
+    ex.days += 1
+    punctualityMap.set(p.id, ex)
+  }
+  const topPunctuality = Array.from(punctualityMap.values())
+    .map(e => ({ ...e, avgMinutesEarly: Math.round(e.totalMinutesEarly / e.days) }))
+    .sort((a, b) => b.avgMinutesEarly - a.avgMinutesEarly)
+    .slice(0, 20)
   const myTotalPoints = (myPoints ?? []).reduce((s, p) => s + p.points, 0)
 
   const settingsMap = Object.fromEntries((settings ?? []).map(s => [s.key, s.value]))
@@ -227,6 +262,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
       topScoutsToday={topScoutsToday}
       groupScoutLeaderboard={groupScoutLeaderboard}
       consistentEarners={consistentEarners}
+      topPunctuality={topPunctuality}
       memberStartsThisMonth={memberStartsThisMonth}
       teamStartsThisMonth={teamStartsThisMonth}
       isSMOrAbove={isSMOrAbove}
