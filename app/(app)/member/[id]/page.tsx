@@ -142,6 +142,9 @@ export default async function MemberDetailPage({
       teamStartsThisMonth={teamStartsThisMonth}
       totalPoints={totalPoints}
       fullDownline={fullDownline as any[]}
+      sponsorOptions={allTeamProfiles
+        .filter(p => p.id !== targetId)
+        .map(p => ({ id: p.id, full_name: (p as any).full_name, member_id: (p as any).member_id }))}
     />
   )
 }

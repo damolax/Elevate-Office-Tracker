@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import { format, parseISO, isToday, isPast } from 'date-fns'
 import { CURRICULUM, DAILY_SCHEDULE, WEEK_SKILLS_7_12, getWeekCurriculum, WEEK_RULES } from '@/lib/curriculum'
 import { CheckCircle, XCircle, Clock, BookOpen, Calendar, Users, ChevronRight, Award, AlertTriangle, Check, X } from 'lucide-react'
+import ViewAsBanner from '@/components/admin/ViewAsBanner'
 
 type Tab = 'overview' | 'curriculum' | 'schedule' | 'history' | 'admin'
 
@@ -12,13 +13,15 @@ export default function WeeksClient({
   profile, isAdmin, isTrackable, currentWeekNumber,
   myWeekAttendance, myAllAttendance, myAssessments, myAdvancementLog,
   allMembers, allAssessments, allWeekAttendance, workDays, weekStartStr, weekEndStr,
+  isViewingAs, viewAsName,
 }: {
   profile: any; isAdmin: boolean; isTrackable: boolean; currentWeekNumber: number
   myWeekAttendance: any[]; myAllAttendance: any[]; myAssessments: any[]
   myAdvancementLog: any[]; allMembers: any[]; allAssessments: any[]
   allWeekAttendance: any[]; workDays: string[]; weekStartStr: string; weekEndStr: string
+  isViewingAs?: boolean; viewAsName?: string | null
 }) {
-  const [tab, setTab] = useState<Tab>('overview')
+  const [tab, setTab] = useState<Tab>(isTrackable ? 'overview' : 'admin')
   const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const [loading, setLoading] = useState<string | null>(null)
 
@@ -118,15 +121,34 @@ export default function WeeksClient({
   }
 
   const tabs: { id: Tab; label: string }[] = [
-    { id: 'overview', label: 'My Week' },
-    { id: 'curriculum', label: 'Curriculum' },
-    { id: 'schedule', label: 'Schedule' },
-    { id: 'history', label: 'My History' },
+    ...(isTrackable ? [
+      { id: 'overview' as Tab, label: 'My Week' },
+      { id: 'curriculum' as Tab, label: 'Curriculum' },
+      { id: 'schedule' as Tab, label: 'Schedule' },
+      { id: 'history' as Tab, label: 'My History' },
+    ] : []),
     ...(isAdmin ? [{ id: 'admin' as Tab, label: `Members (${allMembers.length})` }] : []),
   ]
 
+  if (!isTrackable && !isAdmin) {
+    return (
+      <div className="max-w-2xl mx-auto space-y-4">
+        {isViewingAs && viewAsName && <ViewAsBanner name={viewAsName} />}
+        <div className="card p-8 text-center space-y-2">
+          <BookOpen className="w-10 h-10 text-gray-300 mx-auto" />
+          <h2 className="text-lg font-semibold text-gray-900">12-Week Program Not Applicable</h2>
+          <p className="text-sm text-gray-500">
+            The 12-week onboarding program applies to Members, Distributors, and Managers only.
+            {profile.status && ` As a ${String(profile.status).replace('_', ' ')}`}, this program doesn&apos;t apply here.
+          </p>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-6 max-w-5xl mx-auto">
+      {isViewingAs && viewAsName && <ViewAsBanner name={viewAsName} />}
       {msg && (
         <div className={`px-4 py-3 rounded-lg text-sm border ${msg.type === 'success' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
           {msg.text}

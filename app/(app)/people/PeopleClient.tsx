@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import type { Profile, ColorGroup, ActivityStatus } from '@/lib/types'
 import { getStatusLabel, getStatusColor, formatDate } from '@/lib/utils'
 import { ACTIVITY_STATUS_LABELS, ACTIVITY_STATUS_COLORS } from '@/lib/types'
-import { Check, X, Search, ChevronDown, ChevronRight, Shield, UserX, UserCheck } from 'lucide-react'
+import { Check, X, Search, ChevronDown, ChevronRight, Shield, UserX, UserCheck, Eye } from 'lucide-react'
 
 const ACTIVITY_OPTIONS: ActivityStatus[] = [
   'active', 'suspended', 'inactive', 'left_office', 'another_location', 'moved_to_another_office'
@@ -235,6 +235,18 @@ export default function PeopleClient({
             </div>
           </div>
           <div className="flex gap-2">
+            {isMainAdmin && p.id !== currentProfile.id && (
+              <button onClick={async () => {
+                await fetch('/api/admin/view-as', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ target_id: p.id }),
+                })
+                window.location.href = '/dashboard'
+              }} className="btn-icon text-purple-400 hover:text-purple-600" title={`View app as ${p.full_name}`}>
+                <Eye size={16} />
+              </button>
+            )}
             <button onClick={e => { e.stopPropagation(); setSelectedProfile(null) }}
               className="btn-icon text-gray-400 hover:text-gray-600" title="Close">
               <X size={16} />

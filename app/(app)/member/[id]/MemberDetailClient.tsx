@@ -20,7 +20,7 @@ const RANGES = [
 export default function MemberDetailClient({
   viewer, target, canEdit, range,
   totalEarnings, scoutingCount, teamSize, memberStartsThisMonth, teamStartsThisMonth,
-  totalPoints, fullDownline,
+  totalPoints, fullDownline, sponsorOptions,
 }: {
   viewer: Profile
   target: Profile & { color_groups?: any; sponsor?: any }
@@ -33,6 +33,7 @@ export default function MemberDetailClient({
   teamStartsThisMonth: number
   totalPoints: number
   fullDownline: any[]
+  sponsorOptions: { id: string; full_name: string; member_id: string | null }[]
 }) {
   const router = useRouter()
   const [editing, setEditing] = useState(false)
@@ -42,6 +43,7 @@ export default function MemberDetailClient({
     full_name: target.full_name,
     status: target.status,
     week_number: target.week_number ?? 1,
+    sponsor_id: target.sponsor_id ?? '',
   })
 
   const cg = (target as any).color_groups
@@ -53,10 +55,11 @@ export default function MemberDetailClient({
   async function save() {
     setSaving(true)
     setMsg(null)
+    const payload = { ...form, sponsor_id: form.sponsor_id || null }
     const res = await fetch('/api/update-profile', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ user_id: target.id, actor_id: viewer.id, updates: form }),
+      body: JSON.stringify({ user_id: target.id, actor_id: viewer.id, updates: payload }),
     })
     const json = await res.json()
     setSaving(false)
@@ -141,11 +144,20 @@ export default function MemberDetailClient({
             <input type="number" min={1} max={12} className="input" value={form.week_number}
               onChange={e => setForm(f => ({ ...f, week_number: Number(e.target.value) }))} />
           </div>
+          <div>
+            <label className="text-xs text-gray-500">Sponsor</label>
+            <select className="input" value={form.sponsor_id} onChange={e => setForm(f => ({ ...f, sponsor_id: e.target.value }))}>
+              <option value="">No sponsor</option>
+              {sponsorOptions.map(s => (
+                <option key={s.id} value={s.id}>{s.full_name} {s.member_id ? `(${s.member_id})` : ''}</option>
+              ))}
+            </select>
+          </div>
           <button className="btn-primary text-sm" disabled={saving} onClick={save}>
             {saving ? 'Saving…' : 'Save Changes'}
           </button>
           {msg && <p className={`text-xs ${msg.type === 'success' ? 'text-green-600' : 'text-red-600'}`}>{msg.text}</p>}
-          <p className="text-xs text-gray-400">To change color, sponsor, or profile picture, use the People page.</p>
+          <p className="text-xs text-gray-400">To change color or profile picture, use the People page.</p>
         </div>
       )}
 

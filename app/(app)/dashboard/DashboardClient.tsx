@@ -6,6 +6,7 @@ import { formatCurrency, getStatusLabel, getStatusColor } from '@/lib/utils'
 import type { Profile, ColorGroup } from '@/lib/types'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts'
 import { TrendingUp, Users, Target, Calendar, Award, Zap, Star } from 'lucide-react'
+import ViewAsBanner from '@/components/admin/ViewAsBanner'
 
 const RANGES = [
   { value: 'this_week', label: 'This Week' },
@@ -69,7 +70,7 @@ export default function DashboardClient({
   myRank, myTotalPoints, todayAttendanceCount, todayAttendees, newMembersCount,
   topEarners, groupEarnings, colorGroups, isAdmin, isEMOrBelow, settingsMap,
   topScoutsToday, groupScoutLeaderboard, consistentEarners, topPunctuality,
-  memberStartsThisMonth, teamStartsThisMonth, isSMOrAbove,
+  memberStartsThisMonth, teamStartsThisMonth, isSMOrAbove, isViewingAs, viewAsName,
 }: {
   profile: Profile; range: string
   myAttendanceDays: number; myTotalEarnings: number; myScoutingCount: number
@@ -81,6 +82,7 @@ export default function DashboardClient({
   settingsMap: Record<string, string>
   topScoutsToday: any[]; groupScoutLeaderboard: any[]; consistentEarners: any[]; topPunctuality: any[]
   memberStartsThisMonth: number; teamStartsThisMonth: number; isSMOrAbove: boolean
+  isViewingAs?: boolean; viewAsName?: string | null
 }) {
   const router = useRouter()
   const [consistentRange, setConsistentRange] = useState<number>(6) // months
@@ -96,6 +98,7 @@ export default function DashboardClient({
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto animate-fade-in">
+      {isViewingAs && viewAsName && <ViewAsBanner name={viewAsName} />}
 
       {/* Welcome header */}
       <div className="flex items-center justify-between flex-wrap gap-3">

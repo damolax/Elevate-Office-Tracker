@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, subMonths } from 'date-fns'
 import { computeTeam, isSmOrAbove, ATTENDANCE_RULES } from '@/lib/types'
+import { getEffectiveProfile } from '@/lib/view-as'
 import DashboardClient from './DashboardClient'
 
 export default async function DashboardPage({ searchParams }: { searchParams: { range?: string } }) {
@@ -9,7 +10,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const { data: profile, error: profileError } = await supabase
+  const { data: realProfile, error: profileError } = await supabase
     .from('profiles')
     .select('*, color_groups!profiles_color_group_id_fkey(*), sponsor:sponsor_id(id, full_name, member_id)')
     .eq('id', user.id)
@@ -22,8 +23,12 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
     throw new Error(`Failed to load profile: ${profileError.message}`)
   }
 
-  if (!profile) redirect('/pending-approval')
-  if (!profile.approved && !profile.is_admin && !profile.is_director && !profile.is_co_admin) redirect('/pending-approval')
+  if (!realProfile) redirect('/pending-approval')
+  if (!realProfile.approved && !realProfile.is_admin && !realProfile.is_director && !realProfile.is_co_admin) redirect('/pending-approval')
+
+  // Admin "View As": nav/permissions always reflect the REAL logged-in admin;
+  // only the personal stats below reflect whoever they're viewing as.
+  const { profile, isViewingAs, viewAsName } = await getEffectiveProfile(supabase, realProfile)
 
   const range = searchParams.range ?? 'this_month'
   const now = new Date()
@@ -31,7 +36,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
   const thisMonthStart = format(startOfMonth(now), 'yyyy-MM-dd')
   const thisMonthEnd = format(endOfMonth(now), 'yyyy-MM-dd')
   const thisMonthStr = format(now, 'yyyy-MM')
-  const isAdmin = profile.is_admin || profile.is_director
+  const isAdmin = profile.is_admin || profile.is_director || profile.is_co_admin
   const isEMOrBelow = ['member','distributor','manager','executive_manager'].includes(profile.status)
 
   let rangeStart: string, rangeEnd: string
@@ -75,14 +80,14 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
     { data: allProfilesForTeam },
     { data: punctualityRaw },
   ] = await Promise.all([
-    supabase.from('attendance').select('date').eq('user_id', user.id)
+    supabase.from('attendance').select('date').eq('user_id', profile.id)
       .gte('date', rangeStart).lte('date', rangeEnd).not('sign_in_time', 'is', null),
 
-    supabase.from('weekly_earnings').select('amount_usd').eq('user_id', user.id)
+    supabase.from('weekly_earnings').select('amount_usd').eq('user_id', profile.id)
       .gte('week_start', rangeStart).lte('week_start', rangeEnd),
 
     supabase.from('scouting_records').select('id', { count: 'exact', head: true })
-      .eq('user_id', user.id).eq('status', 'contacted'),
+      .eq('user_id', profile.id).eq('status', 'contacted'),
 
     supabase.from('attendance')
       .select('user_id, profiles!inner(id, full_name, member_id, status, color_group_id, profile_picture, color_groups!profiles_color_group_id_fkey(name, hex_color))')
@@ -125,7 +130,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
 
     // My own points
     supabase.from('earner_points')
-      .select('points, month_str, rank').eq('user_id', user.id),
+      .select('points, month_str, rank').eq('user_id', profile.id),
 
     // All approved profiles (for team-starts computation)
     supabase.from('profiles')
@@ -150,7 +155,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
     earnerMap.set(p.id, ex)
   }
   const topEarners = Array.from(earnerMap.values()).sort((a, b) => b.total - a.total).slice(0, 20)
-  const myRank = topEarners.findIndex(e => e.id === user.id) + 1
+  const myRank = topEarners.findIndex(e => e.id === profile.id) + 1
 
   // Group earnings
   const groupMap = new Map<string, any>()
@@ -230,13 +235,13 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
   // Members Start This Month: people you directly sponsored who just started this month
   const allTeamProfiles = allProfilesForTeam ?? []
   const memberStartsThisMonth = allTeamProfiles.filter(
-    p => p.sponsor_id === user.id && p.is_new_member && p.new_member_month === thisMonthStr
+    p => p.sponsor_id === profile.id && p.is_new_member && p.new_member_month === thisMonthStr
   ).length
 
   // Team Starts / SM Team Starts: everyone in your downline up to (not including) the
   // next Senior Manager boundary — same rule for members and Senior Managers alike.
   const isSMOrAbove = isSmOrAbove(profile.status)
-  const myTeamIds = computeTeam(user.id, 'senior_manager' as any, allTeamProfiles as any)
+  const myTeamIds = computeTeam(profile.id, 'senior_manager' as any, allTeamProfiles as any)
   const teamStartsThisMonth = allTeamProfiles.filter(
     p => myTeamIds.includes(p.id) && p.is_new_member && p.new_member_month === thisMonthStr
   ).length
@@ -266,6 +271,8 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
       memberStartsThisMonth={memberStartsThisMonth}
       teamStartsThisMonth={teamStartsThisMonth}
       isSMOrAbove={isSMOrAbove}
+      isViewingAs={isViewingAs}
+      viewAsName={viewAsName}
     />
   )
 }

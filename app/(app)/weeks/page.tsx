@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { format, startOfWeek, endOfWeek, eachDayOfInterval, isWeekend } from 'date-fns'
+import { getEffectiveProfile } from '@/lib/view-as'
 import WeeksClient from './WeeksClient'
 
 export default async function WeeksPage() {
@@ -8,15 +9,18 @@ export default async function WeeksPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const { data: profile } = await supabase
+  const { data: realProfile } = await supabase
     .from('profiles')
     .select('*, color_groups!profiles_color_group_id_fkey(*)')
     .eq('id', user.id)
     .single()
-  if (!profile) redirect('/login')
+  if (!realProfile) redirect('/login')
 
-  const isAdmin = profile.is_admin || profile.is_director
-  const isTrackable = ['member', 'distributor', 'manager'].includes(profile.status)
+  const { profile, isViewingAs, viewAsName } = await getEffectiveProfile(supabase, realProfile)
+
+  const isAdmin = profile.is_admin || profile.is_director || profile.is_co_admin
+  const isAdminTier = isAdmin
+  const isTrackable = !isAdminTier && ['member', 'distributor', 'manager'].includes(profile.status)
 
   // Get current week bounds (Mon–Fri)
   const now = new Date()
@@ -29,7 +33,7 @@ export default async function WeeksPage() {
   const { data: myWeekAttendance } = await supabase
     .from('attendance')
     .select('*')
-    .eq('user_id', user.id)
+    .eq('user_id', profile.id)
     .gte('date', weekStartStr)
     .lte('date', weekEndStr)
     .not('sign_in_time', 'is', null)
@@ -38,7 +42,7 @@ export default async function WeeksPage() {
   const { data: myAllAttendance } = await supabase
     .from('attendance')
     .select('*')
-    .eq('user_id', user.id)
+    .eq('user_id', profile.id)
     .not('sign_in_time', 'is', null)
     .order('date', { ascending: false })
 
@@ -46,14 +50,14 @@ export default async function WeeksPage() {
   const { data: myAssessments } = await supabase
     .from('week_assessments')
     .select('*')
-    .eq('user_id', user.id)
+    .eq('user_id', profile.id)
     .order('week_number')
 
   // My advancement log
   const { data: myAdvancementLog } = await supabase
     .from('week_advancement_log')
     .select('*')
-    .eq('user_id', user.id)
+    .eq('user_id', profile.id)
     .order('created_at', { ascending: false })
 
   // Admin: all trackable members with their week data
@@ -113,6 +117,8 @@ export default async function WeeksPage() {
       workDays={workDays}
       weekStartStr={weekStartStr}
       weekEndStr={weekEndStr}
+      isViewingAs={isViewingAs}
+      viewAsName={viewAsName}
     />
   )
 }
