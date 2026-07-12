@@ -74,6 +74,7 @@ create or replace function update_updated_at()
 returns trigger language plpgsql as $$
 begin new.updated_at = now(); return new; end; $$;
 
+drop trigger if exists profiles_updated_at on profiles;
 create trigger profiles_updated_at before update on profiles
   for each row execute function update_updated_at();
 
@@ -111,6 +112,7 @@ create table if not exists weekly_earnings (
   unique(user_id, week_start)
 );
 
+drop trigger if exists weekly_earnings_updated_at on weekly_earnings;
 create trigger weekly_earnings_updated_at before update on weekly_earnings
   for each row execute function update_updated_at();
 
@@ -165,6 +167,7 @@ create table if not exists community_posts (
   updated_at timestamptz not null default now()
 );
 
+drop trigger if exists community_posts_updated_at on community_posts;
 create trigger community_posts_updated_at before update on community_posts
   for each row execute function update_updated_at();
 
@@ -273,99 +276,128 @@ returns boolean language sql security definer stable as $$
 $$;
 
 -- PROFILES policies
+drop policy if exists "Anyone can view approved profiles" on profiles;
 create policy "Anyone can view approved profiles" on profiles
   for select using (approved = true);
 
+drop policy if exists "Users can view own profile" on profiles;
 create policy "Users can view own profile" on profiles
   for select using (id = auth.uid());
 
+drop policy if exists "Admins view all profiles" on profiles;
 create policy "Admins view all profiles" on profiles
   for select using (is_admin_or_director());
 
+drop policy if exists "Users update own profile" on profiles;
 create policy "Users update own profile" on profiles
   for update using (id = auth.uid())
   with check (id = auth.uid());
 
+drop policy if exists "Admins manage all profiles" on profiles;
 create policy "Admins manage all profiles" on profiles
   for all using (is_admin_or_director());
 
+drop policy if exists "Allow insert on signup" on profiles;
 create policy "Allow insert on signup" on profiles
   for insert with check (id = auth.uid());
 
 -- COLOR GROUPS policies
+drop policy if exists "Anyone can view color groups" on color_groups;
 create policy "Anyone can view color groups" on color_groups
   for select using (true);
 
+drop policy if exists "Admins manage color groups" on color_groups;
 create policy "Admins manage color groups" on color_groups
   for all using (is_admin_or_director());
 
 -- ATTENDANCE policies
+drop policy if exists "Users view own attendance" on attendance;
 create policy "Users view own attendance" on attendance
   for select using (user_id = auth.uid());
 
+drop policy if exists "SM+ view team attendance" on attendance;
 create policy "SM+ view team attendance" on attendance
   for select using (is_sm_or_above());
 
+drop policy if exists "Admins view all attendance" on attendance;
 create policy "Admins view all attendance" on attendance
   for select using (is_admin_or_director());
 
+drop policy if exists "Users manage own attendance" on attendance;
 create policy "Users manage own attendance" on attendance
   for all using (user_id = auth.uid());
 
+drop policy if exists "Admins manage all attendance" on attendance;
 create policy "Admins manage all attendance" on attendance
   for all using (is_admin_or_director());
 
 -- WEEKLY EARNINGS policies
+drop policy if exists "Members view own earnings" on weekly_earnings;
 create policy "Members view own earnings" on weekly_earnings
   for select using (user_id = auth.uid());
 
+drop policy if exists "SM+ view team earnings" on weekly_earnings;
 create policy "SM+ view team earnings" on weekly_earnings
   for select using (is_sm_or_above());
 
+drop policy if exists "Admins manage earnings" on weekly_earnings;
 create policy "Admins manage earnings" on weekly_earnings
   for all using (is_admin_or_director());
 
 -- SCOUTING policies
+drop policy if exists "Users view own scouting" on scouting_records;
 create policy "Users view own scouting" on scouting_records
   for select using (user_id = auth.uid());
 
+drop policy if exists "SM+ view team scouting" on scouting_records;
 create policy "SM+ view team scouting" on scouting_records
   for select using (is_sm_or_above());
 
+drop policy if exists "Users manage own scouting" on scouting_records;
 create policy "Users manage own scouting" on scouting_records
   for all using (user_id = auth.uid());
 
+drop policy if exists "Admins manage all scouting" on scouting_records;
 create policy "Admins manage all scouting" on scouting_records
   for all using (is_admin_or_director());
 
 -- EVENTS policies
+drop policy if exists "Anyone authenticated can view events" on events;
 create policy "Anyone authenticated can view events" on events
   for select using (auth.uid() is not null);
 
+drop policy if exists "Admins manage events" on events;
 create policy "Admins manage events" on events
   for all using (is_admin_or_director());
 
 -- COMMUNITY policies
+drop policy if exists "Anyone authenticated can view posts" on community_posts;
 create policy "Anyone authenticated can view posts" on community_posts
   for select using (auth.uid() is not null);
 
+drop policy if exists "Users manage own posts" on community_posts;
 create policy "Users manage own posts" on community_posts
   for all using (user_id = auth.uid());
 
+drop policy if exists "Admins manage all posts" on community_posts;
 create policy "Admins manage all posts" on community_posts
   for all using (is_admin_or_director());
 
 -- TASKS policies
+drop policy if exists "Users view own tasks" on tasks;
 create policy "Users view own tasks" on tasks
   for select using (assigned_to = auth.uid() or assigned_by = auth.uid());
 
+drop policy if exists "SM+ view and create tasks" on tasks;
 create policy "SM+ view and create tasks" on tasks
   for all using (is_sm_or_above());
 
 -- APP SETTINGS policies
+drop policy if exists "Anyone can read settings" on app_settings;
 create policy "Anyone can read settings" on app_settings
   for select using (true);
 
+drop policy if exists "Admins update settings" on app_settings;
 create policy "Admins update settings" on app_settings
   for all using (is_admin_or_director());
 
@@ -387,12 +419,15 @@ create table if not exists feedback (
 
 alter table feedback enable row level security;
 
+drop policy if exists "Users view own feedback" on feedback;
 create policy "Users view own feedback" on feedback
   for select using (user_id = auth.uid());
 
+drop policy if exists "Users create feedback" on feedback;
 create policy "Users create feedback" on feedback
   for insert with check (user_id = auth.uid());
 
+drop policy if exists "Admins manage all feedback" on feedback;
 create policy "Admins manage all feedback" on feedback
   for all using (is_admin_or_director());
 
@@ -434,12 +469,15 @@ create table if not exists week_assessments (
 
 alter table week_assessments enable row level security;
 
+drop policy if exists "Users view own assessments" on week_assessments;
 create policy "Users view own assessments" on week_assessments
   for select using (user_id = auth.uid());
 
+drop policy if exists "Admins manage all assessments" on week_assessments;
 create policy "Admins manage all assessments" on week_assessments
   for all using (is_admin_or_director());
 
+drop policy if exists "SM view team assessments" on week_assessments;
 create policy "SM view team assessments" on week_assessments
   for select using (is_sm_or_above());
 
@@ -460,9 +498,11 @@ create table if not exists week_advancement_log (
 
 alter table week_advancement_log enable row level security;
 
+drop policy if exists "Users view own advancement log" on week_advancement_log;
 create policy "Users view own advancement log" on week_advancement_log
   for select using (user_id = auth.uid());
 
+drop policy if exists "Admins manage advancement log" on week_advancement_log;
 create policy "Admins manage advancement log" on week_advancement_log
   for all using (is_admin_or_director());
 
@@ -481,6 +521,7 @@ create table if not exists absence_emails (
 
 alter table absence_emails enable row level security;
 
+drop policy if exists "Admins manage absence emails" on absence_emails;
 create policy "Admins manage absence emails" on absence_emails
   for all using (is_admin_or_director());
 
@@ -524,9 +565,11 @@ create table if not exists earner_points (
 
 alter table earner_points enable row level security;
 
+drop policy if exists "Anyone can view earner points" on earner_points;
 create policy "Anyone can view earner points" on earner_points
   for select using (true);
 
+drop policy if exists "Admins manage earner points" on earner_points;
 create policy "Admins manage earner points" on earner_points
   for all using (is_admin_or_director());
 
