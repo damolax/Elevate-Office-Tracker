@@ -26,7 +26,7 @@ export default function Header({ profile }: { profile: Profile }) {
   const pathname = usePathname()
   const router = useRouter()
   const [mobileOpen, setMobileOpen] = useState(false)
-  const isAdmin = profile.is_admin || profile.is_director
+  const isAdmin = profile.is_admin || profile.is_director || profile.is_co_admin
   const isSm = isSmOrAbove(profile.status)
 
   const title = Object.entries(PAGE_TITLES).find(([k]) =>

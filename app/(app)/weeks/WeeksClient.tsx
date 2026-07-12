@@ -5,7 +5,6 @@ import { createClient } from '@/lib/supabase/client'
 import { format, parseISO, isToday, isPast } from 'date-fns'
 import { CURRICULUM, DAILY_SCHEDULE, WEEK_SKILLS_7_12, getWeekCurriculum, WEEK_RULES } from '@/lib/curriculum'
 import { CheckCircle, XCircle, Clock, BookOpen, Calendar, Users, ChevronRight, Award, AlertTriangle, Check, X } from 'lucide-react'
-import ViewAsBanner from '@/components/admin/ViewAsBanner'
 
 type Tab = 'overview' | 'curriculum' | 'schedule' | 'history' | 'admin'
 
@@ -133,7 +132,6 @@ export default function WeeksClient({
   if (!isTrackable && !isAdmin) {
     return (
       <div className="max-w-2xl mx-auto space-y-4">
-        {isViewingAs && viewAsName && <ViewAsBanner name={viewAsName} />}
         <div className="card p-8 text-center space-y-2">
           <BookOpen className="w-10 h-10 text-gray-300 mx-auto" />
           <h2 className="text-lg font-semibold text-gray-900">12-Week Program Not Applicable</h2>
@@ -148,7 +146,6 @@ export default function WeeksClient({
 
   return (
     <div className="space-y-6 max-w-5xl mx-auto">
-      {isViewingAs && viewAsName && <ViewAsBanner name={viewAsName} />}
       {msg && (
         <div className={`px-4 py-3 rounded-lg text-sm border ${msg.type === 'success' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
           {msg.text}

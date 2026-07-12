@@ -4,7 +4,7 @@ import { useState, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import type { Profile, ColorGroup, ActivityStatus } from '@/lib/types'
 import { getStatusLabel, getStatusColor, formatDate } from '@/lib/utils'
-import { ACTIVITY_STATUS_LABELS, ACTIVITY_STATUS_COLORS } from '@/lib/types'
+import { ACTIVITY_STATUS_LABELS, ACTIVITY_STATUS_COLORS, statusRank } from '@/lib/types'
 import { Check, X, Search, ChevronDown, ChevronRight, Shield, UserX, UserCheck, Eye } from 'lucide-react'
 
 const ACTIVITY_OPTIONS: ActivityStatus[] = [
@@ -39,11 +39,24 @@ export default function PeopleClient({
   const isDirector = currentProfile.is_director && !isMainAdmin
   const isCoAdmin = currentProfile.is_co_admin && !isMainAdmin && !currentProfile.is_director
 
-  // Hide main admin from everyone but main admin; hide Directors from Co-Admins
-  // (no one can view or edit someone above them in the hierarchy)
+  // A co-admin's own downline (used for the "can view upline only if it's my downline" rule)
+  function getDownlineIds(rootId: string): string[] {
+    const direct = allProfiles.filter(p => p.sponsor_id === rootId).map(p => p.id)
+    return [...direct, ...direct.flatMap(id => getDownlineIds(id))]
+  }
+  const myDownlineIds = isCoAdmin ? getDownlineIds(currentProfile.id) : []
+
+  // The one co-admin this person (if Director/Co-Admin, not main admin) has personally assigned
+  const myAssignedCoAdmin = allProfiles.find(p => p.co_admin_assigned_by === currentProfile.id && p.is_co_admin)
+
+  // Hide main admin from everyone but main admin; hide Directors from Co-Admins.
+  // Co-Admins additionally cannot view anyone ABOVE them in status rank unless
+  // that person is in their own downline — but can always view anyone at or
+  // below their rank, downline or not.
   const visibleProfiles = allProfiles.filter(p => {
     if (!isMainAdmin && p.id === mainAdminId) return false
     if (isCoAdmin && p.is_director) return false
+    if (isCoAdmin && statusRank(p.status) > statusRank(currentProfile.status) && !myDownlineIds.includes(p.id)) return false
     return true
   })
 
@@ -174,8 +187,28 @@ export default function PeopleClient({
   }
 
   async function toggleCoAdmin(profileId: string, current: boolean) {
-    if (!isMainAdmin) return
-    await updateProfile(profileId, { is_co_admin: !current })
+    if (!isMainAdmin && !isDirector && !isCoAdmin) return
+
+    if (!isMainAdmin) {
+      // Directors and Co-Admins may each assign exactly ONE co-admin of their own
+      if (!current) {
+        if (myAssignedCoAdmin) {
+          setMsg({ type: 'error', text: `You can only assign one Co-Admin. You already made ${myAssignedCoAdmin.full_name} a Co-Admin — remove them first if you want to choose someone else.` })
+          return
+        }
+      } else {
+        const target = allProfiles.find(p => p.id === profileId)
+        if (target?.co_admin_assigned_by !== currentProfile.id) {
+          setMsg({ type: 'error', text: 'You can only remove a Co-Admin that you personally assigned.' })
+          return
+        }
+      }
+    }
+
+    await updateProfile(profileId, {
+      is_co_admin: !current,
+      co_admin_assigned_by: !current ? currentProfile.id : null,
+    })
     // Notify the person
     const supabase = createClient()
     await supabase.from('notifications').insert({
@@ -316,17 +349,24 @@ export default function PeopleClient({
           </div>
         </div>
 
-        {/* Co-admin toggle — main admin only */}
-        {isMainAdmin && p.id !== currentProfile.id && (
-          <div className="flex items-center gap-3 pt-2 border-t border-gray-100">
-            <Shield size={15} className="text-purple-500" />
-            <span className="text-sm text-gray-700 flex-1">Co-Admin Access</span>
-            <button onClick={() => toggleCoAdmin(p.id, p.is_co_admin)}
-              className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all ${p.is_co_admin ? 'bg-purple-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-purple-50'}`}>
-              {p.is_co_admin ? 'Remove Co-Admin' : 'Make Co-Admin'}
-            </button>
-          </div>
-        )}
+        {/* Co-admin toggle — main admin unrestricted; Directors/Co-Admins may
+            each assign exactly one of their own and can only remove that one */}
+        {(isMainAdmin || isDirector || isCoAdmin) && p.id !== currentProfile.id && (() => {
+          const canRemoveThis = isMainAdmin || p.co_admin_assigned_by === currentProfile.id
+          const canGrantMore = isMainAdmin || !myAssignedCoAdmin
+          const disabled = p.is_co_admin ? !canRemoveThis : !canGrantMore
+          return (
+            <div className="flex items-center gap-3 pt-2 border-t border-gray-100">
+              <Shield size={15} className="text-purple-500" />
+              <span className="text-sm text-gray-700 flex-1">Co-Admin Access</span>
+              <button onClick={() => toggleCoAdmin(p.id, p.is_co_admin)} disabled={disabled}
+                title={disabled ? (p.is_co_admin ? "Only who assigned this Co-Admin can remove them" : "You've already assigned your one Co-Admin") : undefined}
+                className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all ${disabled ? 'bg-gray-50 text-gray-300 cursor-not-allowed' : p.is_co_admin ? 'bg-purple-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-purple-50'}`}>
+                {p.is_co_admin ? 'Remove Co-Admin' : 'Make Co-Admin'}
+              </button>
+            </div>
+          )
+        })()}
       </div>
     )
   }

@@ -22,7 +22,7 @@ interface NavItem {
 export default function Sidebar({ profile }: { profile: Profile }) {
   const pathname = usePathname()
   const router = useRouter()
-  const isAdmin = profile.is_admin || profile.is_director
+  const isAdmin = profile.is_admin || profile.is_director || profile.is_co_admin || profile.is_co_admin
   const isSm = isSmOrAbove(profile.status)
 
   const navItems: NavItem[] = [
@@ -90,7 +90,7 @@ export default function Sidebar({ profile }: { profile: Profile }) {
           <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full font-medium">
             {getStatusLabel(profile.status)}
           </span>
-          {(profile.is_admin || profile.is_director) && (
+          {(profile.is_admin || profile.is_director || profile.is_co_admin) && (
             <span className="ml-1 text-xs bg-brand-100 text-brand-700 px-2 py-0.5 rounded-full font-medium">
               {profile.is_admin ? 'Admin' : 'Director'}
             </span>

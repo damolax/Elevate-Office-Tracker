@@ -69,14 +69,12 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
     { count: myScoutingCount },
     { data: todayAttendance },
     { data: colorGroups },
-    { data: topEarnersRaw },
+    { data: allEarningsRaw },
     { count: newMembersCount },
     { data: groupEarningsRaw },
     { data: settings },
     { data: todayScouts },
     { data: groupScouts },
-    { data: consistentPoints },
-    { data: myPoints },
     { data: allProfilesForTeam },
     { data: punctualityRaw },
   ] = await Promise.all([
@@ -95,10 +93,11 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
 
     supabase.from('color_groups').select('*').order('member_count', { ascending: false }),
 
-    // Top 20 earners EM and below this month
+    // ALL earnings for EM-and-below, all-time — used to compute BOTH Top
+    // Earners (range-aware) and Consistent Earners (live monthly ranking),
+    // with zero dependency on any manual/batch calculation step.
     supabase.from('weekly_earnings')
-      .select('amount_usd, profiles!inner(id, full_name, member_id, status, profile_picture, color_groups!profiles_color_group_id_fkey(name, hex_color))')
-      .gte('week_start', thisMonthStart).lte('week_start', thisMonthEnd)
+      .select('amount_usd, week_start, user_id, profiles!inner(id, full_name, member_id, status, profile_picture, color_groups!profiles_color_group_id_fkey(name, hex_color))')
       .in('profiles.status', ['member','distributor','manager','executive_manager']),
 
     supabase.from('profiles').select('id', { count: 'exact', head: true })
@@ -123,15 +122,6 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
       .select('user_id, profiles!inner(color_group_id, color_groups!profiles_color_group_id_fkey(name, hex_color))')
       .eq('status', 'contacted'),
 
-    // Consistent earner points (top 20)
-    supabase.from('earner_points')
-      .select('user_id, points, month_str, rank, amount_usd, profiles(id, full_name, member_id, profile_picture, color_groups!profiles_color_group_id_fkey(name, hex_color))')
-      .order('month_str', { ascending: false }),
-
-    // My own points
-    supabase.from('earner_points')
-      .select('points, month_str, rank').eq('user_id', profile.id),
-
     // All approved profiles (for team-starts computation)
     supabase.from('profiles')
       .select('id, sponsor_id, status, is_new_member, new_member_month')
@@ -145,9 +135,10 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
       .eq('is_night_session', false),
   ])
 
-  // Aggregate top earners
+  // Top Earners: sum of earnings within the SELECTED range (not hardcoded to this month)
   const earnerMap = new Map<string, any>()
-  for (const e of (topEarnersRaw ?? [])) {
+  for (const e of (allEarningsRaw ?? [])) {
+    if (e.week_start < rangeStart || e.week_start > rangeEnd) continue
     const p = (e as any).profiles
     if (!p) continue
     const ex = earnerMap.get(p.id) ?? { id: p.id, full_name: p.full_name, member_id: p.member_id, status: p.status, profile_picture: p.profile_picture, total: 0, group_name: p.color_groups?.name ?? '—', group_color: p.color_groups?.hex_color ?? '#999' }
@@ -190,15 +181,39 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
   }
   const groupScoutLeaderboard = Array.from(groupScoutMap.values()).sort((a, b) => b.count - a.count)
 
-  // Consistent earner leaderboard
-  const pointsMap = new Map<string, any>()
-  for (const ep of (consistentPoints ?? [])) {
-    const p = (ep as any).profiles
+  // Consistent Earner points — computed LIVE from raw earnings, no manual
+  // recalculation step needed ever. For each calendar month that has any
+  // earnings, rank EM-and-below earners by that month's total and award
+  // 1st=10pts, 2nd=9 ... 10th=1, 11th+=0 (same formula as before). Then sum
+  // points only for months that fall within the selected date range, so a
+  // "Last 3 Months" filter shows exactly the points earned in those months.
+  const monthTotals = new Map<string, Map<string, number>>() // month_str -> user_id -> total
+  const personById = new Map<string, any>()
+  for (const e of (allEarningsRaw ?? [])) {
+    const p = (e as any).profiles
     if (!p) continue
-    const ex = pointsMap.get(p.id) ?? { id: p.id, full_name: p.full_name, member_id: p.member_id, profile_picture: p.profile_picture, group_name: p.color_groups?.name ?? '—', group_color: p.color_groups?.hex_color ?? '#999', totalPoints: 0, months: 0 }
-    ex.totalPoints += ep.points
-    ex.months++
-    pointsMap.set(p.id, ex)
+    personById.set(p.id, p)
+    const monthStr = String(e.week_start).slice(0, 7) // YYYY-MM
+    if (!monthTotals.has(monthStr)) monthTotals.set(monthStr, new Map())
+    const userTotals = monthTotals.get(monthStr)!
+    userTotals.set(p.id, (userTotals.get(p.id) ?? 0) + Number(e.amount_usd))
+  }
+  const pointsMap = new Map<string, any>()
+  for (const [monthStr, userTotals] of monthTotals.entries()) {
+    // Only count this month's points if the month falls within the selected range
+    const monthDate = monthStr + '-01'
+    if (monthDate < rangeStart.slice(0, 7) + '-01' || monthDate > rangeEnd) continue
+    const ranked = Array.from(userTotals.entries()).sort((a, b) => b[1] - a[1])
+    ranked.forEach(([userId, amount], i) => {
+      const points = i < 10 ? 10 - i : 0
+      if (points === 0) return
+      const p = personById.get(userId)
+      if (!p) return
+      const ex = pointsMap.get(userId) ?? { id: userId, full_name: p.full_name, member_id: p.member_id, profile_picture: p.profile_picture, group_name: p.color_groups?.name ?? '—', group_color: p.color_groups?.hex_color ?? '#999', totalPoints: 0, months: 0 }
+      ex.totalPoints += points
+      ex.months++
+      pointsMap.set(userId, ex)
+    })
   }
   const consistentEarners = Array.from(pointsMap.values()).sort((a, b) => b.totalPoints - a.totalPoints).slice(0, 20)
 
@@ -228,7 +243,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
     .map(e => ({ ...e, avgMinutesEarly: Math.round(e.totalMinutesEarly / e.days) }))
     .sort((a, b) => b.avgMinutesEarly - a.avgMinutesEarly)
     .slice(0, 20)
-  const myTotalPoints = (myPoints ?? []).reduce((s, p) => s + p.points, 0)
+  const myTotalPoints = pointsMap.get(profile.id)?.totalPoints ?? 0
 
   const settingsMap = Object.fromEntries((settings ?? []).map(s => [s.key, s.value]))
 

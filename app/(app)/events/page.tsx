@@ -20,7 +20,7 @@ export default async function EventsPage() {
     <EventsClient
       profile={profile}
       events={(events ?? []) as any[]}
-      isAdmin={profile.is_admin || profile.is_director}
+      isAdmin={profile.is_admin || profile.is_director || profile.is_co_admin}
     />
   )
 }

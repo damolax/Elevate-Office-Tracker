@@ -10,7 +10,7 @@ export default async function FeedbackPage() {
   const { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).single()
   if (!profile) redirect('/login')
 
-  const isAdmin = profile.is_admin || profile.is_director
+  const isAdmin = profile.is_admin || profile.is_director || profile.is_co_admin
 
   // My own feedback
   const { data: myFeedback } = await supabase

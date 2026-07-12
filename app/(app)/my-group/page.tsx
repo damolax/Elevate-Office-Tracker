@@ -13,7 +13,7 @@ export default async function MyGroupPage() {
 
   // Only group leaders can access this page
   const isGroupLeader = profile.member_id?.endsWith('-001') ?? false
-  const isAdmin = profile.is_admin || profile.is_director
+  const isAdmin = profile.is_admin || profile.is_director || profile.is_co_admin
   if (!isGroupLeader && !isAdmin) redirect('/dashboard')
 
   // Get all members in the same color group

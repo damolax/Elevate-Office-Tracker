@@ -3,16 +3,18 @@ import { redirect } from 'next/navigation'
 import TeamClient from './TeamClient'
 import { computeTeam, STATUS_ORDER, UserStatus } from '@/lib/types'
 import type { Profile } from '@/lib/types'
+import { getEffectiveProfile } from '@/lib/view-as'
 
 export default async function TeamPage({ searchParams }: { searchParams: { filter?: string; member?: string } }) {
   const supabase = createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const { data: profile } = await supabase
+  const { data: realProfile } = await supabase
     .from('profiles').select('*, color_groups!profiles_color_group_id_fkey(*)').eq('id', user.id).single()
-  if (!profile) redirect('/login')
+  if (!realProfile) redirect('/login')
 
+  const { profile } = await getEffectiveProfile(supabase, realProfile)
   const isAdmin = profile.is_admin || profile.is_director || profile.is_co_admin
 
   const { data: allProfiles } = await supabase
@@ -25,7 +27,7 @@ export default async function TeamPage({ searchParams }: { searchParams: { filte
 
   // Compute all team filter options for this person
   const teamFilters: Record<string, string[]> = {}
-  teamFilters['all'] = computeTeam(user.id, 'member' as UserStatus, profiles as Profile[])
+  teamFilters['all'] = computeTeam(profile.id, 'member' as UserStatus, profiles as Profile[])
 
   // Build available filter levels based on what statuses exist in my downline
   const myFullDownline = teamFilters['all']
@@ -35,7 +37,7 @@ export default async function TeamPage({ searchParams }: { searchParams: { filte
 
   STATUS_ORDER.forEach(status => {
     if (statusesInDownline.has(status)) {
-      teamFilters[status] = computeTeam(user.id, status as UserStatus, profiles as Profile[])
+      teamFilters[status] = computeTeam(profile.id, status as UserStatus, profiles as Profile[])
     }
   })
 

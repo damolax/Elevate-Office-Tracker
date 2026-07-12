@@ -641,3 +641,11 @@ drop trigger if exists trg_auto_create_sm_color_group on profiles;
 create trigger trg_auto_create_sm_color_group
 before update on profiles
 for each row execute function auto_create_sm_color_group();
+
+-- =============================================
+-- FEATURE: track who granted co-admin status, so Directors and Co-Admins
+-- can each promote exactly one other co-admin from their own side, while
+-- the main Admin can still remove anyone's co-admin status regardless of
+-- who granted it.
+-- =============================================
+alter table profiles add column if not exists co_admin_assigned_by uuid references profiles(id);

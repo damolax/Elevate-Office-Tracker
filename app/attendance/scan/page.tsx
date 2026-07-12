@@ -23,7 +23,7 @@ export default async function ScanPage() {
           <h1 className="text-xl font-bold text-gray-900">Elevate Attendance</h1>
         </div>
         <QRScanner
-          isAdmin={profile?.is_admin || profile?.is_director || false}
+          isAdmin={profile?.is_admin || profile?.is_director || profile?.is_co_admin || false}
           adminProfileId={user.id}
         />
       </div>

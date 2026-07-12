@@ -1,15 +1,18 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import GroupClient from './GroupClient'
+import { getEffectiveProfile } from '@/lib/view-as'
 
 export default async function GroupPage() {
   const supabase = createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const { data: profile } = await supabase
+  const { data: realProfile } = await supabase
     .from('profiles').select('*, color_groups!profiles_color_group_id_fkey(*)').eq('id', user.id).single()
-  if (!profile) redirect('/login')
+  if (!realProfile) redirect('/login')
+
+  const { profile } = await getEffectiveProfile(supabase, realProfile)
   if (!profile.color_group_id) redirect('/dashboard')
 
   const { data: groupMembers } = await supabase

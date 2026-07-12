@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { format, startOfMonth, endOfMonth } from 'date-fns'
 import AttendanceClient from './AttendanceClient'
+import { getEffectiveProfile } from '@/lib/view-as'
 
 export default async function AttendancePage({
   searchParams,
@@ -12,12 +13,14 @@ export default async function AttendancePage({
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const { data: profile } = await supabase
+  const { data: realProfile } = await supabase
     .from('profiles')
     .select('*, color_groups!profiles_color_group_id_fkey(*)')
     .eq('id', user.id)
     .single()
-  if (!profile) redirect('/login')
+  if (!realProfile) redirect('/login')
+
+  const { profile } = await getEffectiveProfile(supabase, realProfile)
 
   // Admin = main admin, director, or co-admin
   // Only these can see sign-in features and office view
@@ -28,7 +31,7 @@ export default async function AttendancePage({
   const { data: myMonthAttendance } = await supabase
     .from('attendance')
     .select('*')
-    .eq('user_id', user.id)
+    .eq('user_id', profile.id)
     .gte('date', format(startOfMonth(new Date()), 'yyyy-MM-dd'))
     .lte('date', format(endOfMonth(new Date()), 'yyyy-MM-dd'))
     .order('date', { ascending: false })
@@ -38,7 +41,7 @@ export default async function AttendancePage({
   const { data: todayRecord } = await supabase
     .from('attendance')
     .select('*')
-    .eq('user_id', user.id)
+    .eq('user_id', profile.id)
     .eq('date', today)
     .maybeSingle()
 

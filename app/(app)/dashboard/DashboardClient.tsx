@@ -6,7 +6,6 @@ import { formatCurrency, getStatusLabel, getStatusColor } from '@/lib/utils'
 import type { Profile, ColorGroup } from '@/lib/types'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts'
 import { TrendingUp, Users, Target, Calendar, Award, Zap, Star } from 'lucide-react'
-import ViewAsBanner from '@/components/admin/ViewAsBanner'
 
 const RANGES = [
   { value: 'this_week', label: 'This Week' },
@@ -98,7 +97,6 @@ export default function DashboardClient({
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto animate-fade-in">
-      {isViewingAs && viewAsName && <ViewAsBanner name={viewAsName} />}
 
       {/* Welcome header */}
       <div className="flex items-center justify-between flex-wrap gap-3">

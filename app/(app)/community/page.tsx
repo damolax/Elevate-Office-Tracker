@@ -21,7 +21,7 @@ export default async function CommunityPage() {
     <CommunityClient
       profile={profile}
       initialPosts={(posts ?? []) as any[]}
-      isAdmin={profile.is_admin || profile.is_director}
+      isAdmin={profile.is_admin || profile.is_director || profile.is_co_admin}
     />
   )
 }

@@ -1,16 +1,18 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import ScoutingClient from './ScoutingClient'
+import { getEffectiveProfile } from '@/lib/view-as'
 
 export default async function ScoutingPage() {
   const supabase = createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const { data: profile } = await supabase.from('profiles').select('*, color_groups!profiles_color_group_id_fkey(*)').eq('id', user.id).single()
-  if (!profile) redirect('/login')
+  const { data: realProfile } = await supabase.from('profiles').select('*, color_groups!profiles_color_group_id_fkey(*)').eq('id', user.id).single()
+  if (!realProfile) redirect('/login')
 
-  const isAdmin = profile.is_admin || profile.is_director
+  const { profile } = await getEffectiveProfile(supabase, realProfile)
+  const isAdmin = profile.is_admin || profile.is_director || profile.is_co_admin
 
   const [
     { data: myRecords, count: myCount },
@@ -19,7 +21,7 @@ export default async function ScoutingPage() {
   ] = await Promise.all([
     supabase.from('scouting_records')
       .select('*', { count: 'exact' })
-      .eq('user_id', user.id)
+      .eq('user_id', profile.id)
       .order('scouted_at', { ascending: false })
       .limit(200),
 
