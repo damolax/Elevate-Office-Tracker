@@ -1,3 +1,8 @@
+#!/usr/bin/env bash
+set -e
+echo "Writing updated PeopleClient.tsx..."
+mkdir -p "app/(app)/people"
+cat > "app/(app)/people/PeopleClient.tsx" << 'CLAUDE_EOF_MARKER'
 'use client'
 
 import { useState, useRef } from 'react'
@@ -757,3 +762,10 @@ export default function PeopleClient({
     </div>
   )
 }
+CLAUDE_EOF_MARKER
+
+echo "Staging and committing..."
+git add .
+git commit -m "fix: allow admin to assign self a color, restore member-ID auto-gen, broaden one-leader-per-color rule"
+git push origin main
+echo "Done. Vercel should start redeploying now."
