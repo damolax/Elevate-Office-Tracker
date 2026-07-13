@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import MoneyClient from './MoneyClient'
 import { getEffectiveProfile } from '@/lib/view-as'
+import { statusRank, STATUS_ORDER } from '@/lib/types'
 
 export default async function MoneyPage() {
   const supabase = createClient()
@@ -15,7 +16,8 @@ export default async function MoneyPage() {
   const { profile } = await getEffectiveProfile(supabase, realProfile)
 
   const isAdmin = profile.is_admin || profile.is_director || profile.is_co_admin
-  const isEmOrBelow = ['member','distributor','manager','executive_manager'].includes(profile.status)
+  const emAndBelowStatuses = STATUS_ORDER.filter(s => statusRank(s) <= statusRank('executive_manager'))
+  const isEmOrBelow = emAndBelowStatuses.includes(profile.status)
 
   const [
     { data: myWeeklyEarnings },

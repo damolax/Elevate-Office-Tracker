@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, subMonths } from 'date-fns'
-import { computeTeam, isSmOrAbove, ATTENDANCE_RULES } from '@/lib/types'
+import { computeTeam, isSmOrAbove, ATTENDANCE_RULES, statusRank, STATUS_ORDER } from '@/lib/types'
 import { getEffectiveProfile } from '@/lib/view-as'
 import DashboardClient from './DashboardClient'
 
@@ -37,7 +37,8 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
   const thisMonthEnd = format(endOfMonth(now), 'yyyy-MM-dd')
   const thisMonthStr = format(now, 'yyyy-MM')
   const isAdmin = profile.is_admin || profile.is_director || profile.is_co_admin
-  const isEMOrBelow = ['member','distributor','manager','executive_manager'].includes(profile.status)
+  const emAndBelowStatuses = STATUS_ORDER.filter(s => statusRank(s) <= statusRank('executive_manager'))
+  const isEMOrBelow = emAndBelowStatuses.includes(profile.status)
 
   let rangeStart: string, rangeEnd: string
   switch (range) {
@@ -98,7 +99,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
     // with zero dependency on any manual/batch calculation step.
     supabase.from('weekly_earnings')
       .select('amount_usd, week_start, user_id, profiles!inner(id, full_name, member_id, status, profile_picture, color_groups!profiles_color_group_id_fkey(name, hex_color))')
-      .in('profiles.status', ['member','distributor','manager','executive_manager'])
+      .in('profiles.status', emAndBelowStatuses)
       .then(res => {
         if (res.error) console.error('Dashboard allEarnings query failed:', res.error)
         return res
