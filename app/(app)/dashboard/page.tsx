@@ -98,7 +98,11 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
     // with zero dependency on any manual/batch calculation step.
     supabase.from('weekly_earnings')
       .select('amount_usd, week_start, user_id, profiles!inner(id, full_name, member_id, status, profile_picture, color_groups!profiles_color_group_id_fkey(name, hex_color))')
-      .in('profiles.status', ['member','distributor','manager','executive_manager']),
+      .in('profiles.status', ['member','distributor','manager','executive_manager'])
+      .then(res => {
+        if (res.error) console.error('Dashboard allEarnings query failed:', res.error)
+        return res
+      }),
 
     supabase.from('profiles').select('id', { count: 'exact', head: true })
       .eq('is_new_member', true).eq('new_member_month', thisMonthStr),
@@ -243,6 +247,15 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
     .map(e => ({ ...e, avgMinutesEarly: Math.round(e.totalMinutesEarly / e.days) }))
     .sort((a, b) => b.avgMinutesEarly - a.avgMinutesEarly)
     .slice(0, 20)
+
+  // Most Consistent Attendance: ranked by number of days present in the
+  // selected range, tie-broken by punctuality (earlier average = wins ties) —
+  // same underlying dataset as Top Punctuality, just ranked differently.
+  const topAttendance = Array.from(punctualityMap.values())
+    .map(e => ({ ...e, avgMinutesEarly: Math.round(e.totalMinutesEarly / e.days) }))
+    .sort((a, b) => b.days - a.days || b.avgMinutesEarly - a.avgMinutesEarly)
+    .slice(0, 20)
+
   const myTotalPoints = pointsMap.get(profile.id)?.totalPoints ?? 0
 
   const settingsMap = Object.fromEntries((settings ?? []).map(s => [s.key, s.value]))
@@ -288,6 +301,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
       isSMOrAbove={isSMOrAbove}
       isViewingAs={isViewingAs}
       viewAsName={viewAsName}
+      topAttendance={topAttendance}
     />
   )
 }

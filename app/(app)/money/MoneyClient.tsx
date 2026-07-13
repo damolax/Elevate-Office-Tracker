@@ -23,6 +23,7 @@ export default function MoneyClient({
   })
   const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const [loading, setLoading] = useState(false)
+  const [editingEntry, setEditingEntry] = useState<any | null>(null)
   const [statusFilter, setStatusFilter] = useState('all')
   const [groupFilter, setGroupFilter] = useState('all')
   const [monthFilter, setMonthFilter] = useState(format(new Date(), 'yyyy-MM'))
@@ -87,6 +88,24 @@ export default function MoneyClient({
     return Array.from(months).sort().reverse()
   }, [allEarnings])
 
+  // Most recent individual earning entries — used for the editable list
+  const recentEntries = useMemo(() => {
+    return [...allEarnings]
+      .sort((a, b) => b.week_start.localeCompare(a.week_start))
+      .slice(0, 30)
+  }, [allEarnings])
+
+  function startEdit(entry: any) {
+    setEditingEntry(entry)
+    setRecordForm({
+      user_id: entry.user_id,
+      date: entry.week_start,
+      amount: String(entry.amount_usd),
+      notes: entry.notes ?? '',
+    })
+    setTab('record')
+  }
+
   async function recordEarning() {
     if (!recordForm.user_id || !recordForm.amount || !recordForm.date) return
     setLoading(true); setMsg(null)
@@ -107,8 +126,9 @@ export default function MoneyClient({
 
     if (error) setMsg({ type: 'error', text: error.message })
     else {
-      setMsg({ type: 'success', text: `Earnings recorded for ${format(weekStart, 'MMM d')} – ${format(weekEnd, 'MMM d, yyyy')}` })
+      setMsg({ type: 'success', text: `${editingEntry ? 'Earnings updated' : 'Earnings recorded'} for ${format(weekStart, 'MMM d')} – ${format(weekEnd, 'MMM d, yyyy')}` })
       setRecordForm(p => ({ ...p, amount: '', notes: '' }))
+      setEditingEntry(null)
       setTimeout(() => window.location.reload(), 1200)
     }
     setLoading(false)
@@ -347,61 +367,100 @@ export default function MoneyClient({
 
       {/* ── RECORD EARNINGS ── */}
       {tab === 'record' && isAdmin && (
-        <div className="card p-6 max-w-lg">
-          <h2 className="section-title mb-1">Record Earnings</h2>
-          <p className="text-sm text-gray-500 mb-4">
-            Select the member and the date the earnings were made. The app will automatically assign it to the correct week and month.
-          </p>
-          <div className="space-y-4">
-            <div>
-              <label className="label">Member *</label>
-              <select className="input" value={recordForm.user_id} onChange={e => setRecordForm(p => ({ ...p, user_id: e.target.value }))}>
-                <option value="">Select member…</option>
-                {allProfiles.map((p: any) => (
-                  <option key={p.id} value={p.id}>{p.full_name} ({p.member_id ?? 'No ID'})</option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="label">Date Earned *</label>
-              <input className="input" type="date" value={recordForm.date}
-                onChange={e => setRecordForm(p => ({ ...p, date: e.target.value }))} />
-              {recordForm.date && (
-                <p className="text-xs text-gray-400 mt-1">
-                  This will be recorded under: <strong>{format(startOfWeek(new Date(recordForm.date), { weekStartsOn: 6 }), 'MMM d')} – {format(endOfWeek(new Date(recordForm.date), { weekStartsOn: 6 }), 'MMM d, yyyy')}</strong>
-                  {' '} · Month: <strong>{format(new Date(recordForm.date), 'MMMM yyyy')}</strong>
-                </p>
+        <div className="space-y-6">
+          <div className="card p-6 max-w-lg">
+            <div className="flex items-center justify-between mb-1">
+              <h2 className="section-title">{editingEntry ? 'Edit Earnings Entry' : 'Record Earnings'}</h2>
+              {editingEntry && (
+                <button onClick={() => { setEditingEntry(null); setRecordForm({ user_id: '', date: format(new Date(), 'yyyy-MM-dd'), amount: '', notes: '' }) }}
+                  className="text-xs text-gray-400 hover:text-gray-600">Cancel Edit</button>
               )}
             </div>
-
-            <div>
-              <label className="label">Amount (USD) *</label>
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-medium">$</span>
-                <input className="input pl-7" type="number" step="0.01" min="0"
-                  value={recordForm.amount} onChange={e => setRecordForm(p => ({ ...p, amount: e.target.value }))}
-                  placeholder="0.00" />
+            <p className="text-sm text-gray-500 mb-4">
+              {editingEntry
+                ? 'Editing an existing entry — saving will overwrite the amount/notes for this person\'s week.'
+                : 'Select the member and the date the earnings were made. The app will automatically assign it to the correct week and month.'}
+            </p>
+            <div className="space-y-4">
+              <div>
+                <label className="label">Member *</label>
+                <select className="input" value={recordForm.user_id} disabled={!!editingEntry} onChange={e => setRecordForm(p => ({ ...p, user_id: e.target.value }))}>
+                  <option value="">Select member…</option>
+                  {allProfiles.map((p: any) => (
+                    <option key={p.id} value={p.id}>{p.full_name} ({p.member_id ?? 'No ID'})</option>
+                  ))}
+                </select>
               </div>
-            </div>
 
-            <div>
-              <label className="label">Notes (optional)</label>
-              <input className="input" value={recordForm.notes}
-                onChange={e => setRecordForm(p => ({ ...p, notes: e.target.value }))}
-                placeholder="e.g. Fiverr order, client payment…" />
-            </div>
-
-            {msg && (
-              <div className={`px-4 py-3 rounded-lg text-sm border ${msg.type === 'success' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
-                {msg.text}
+              <div>
+                <label className="label">Date Earned *</label>
+                <input className="input" type="date" value={recordForm.date} disabled={!!editingEntry}
+                  onChange={e => setRecordForm(p => ({ ...p, date: e.target.value }))} />
+                {recordForm.date && (
+                  <p className="text-xs text-gray-400 mt-1">
+                    This will be recorded under: <strong>{format(startOfWeek(new Date(recordForm.date), { weekStartsOn: 6 }), 'MMM d')} – {format(endOfWeek(new Date(recordForm.date), { weekStartsOn: 6 }), 'MMM d, yyyy')}</strong>
+                    {' '} · Month: <strong>{format(new Date(recordForm.date), 'MMMM yyyy')}</strong>
+                  </p>
+                )}
               </div>
+
+              <div>
+                <label className="label">Amount (USD) *</label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-medium">$</span>
+                  <input className="input pl-7" type="number" step="0.01" min="0"
+                    value={recordForm.amount} onChange={e => setRecordForm(p => ({ ...p, amount: e.target.value }))}
+                    placeholder="0.00" />
+                </div>
+              </div>
+
+              <div>
+                <label className="label">Notes (optional)</label>
+                <input className="input" value={recordForm.notes}
+                  onChange={e => setRecordForm(p => ({ ...p, notes: e.target.value }))}
+                  placeholder="e.g. Fiverr order, client payment…" />
+              </div>
+
+              {msg && (
+                <div className={`px-4 py-3 rounded-lg text-sm border ${msg.type === 'success' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
+                  {msg.text}
+                </div>
+              )}
+
+              <button onClick={recordEarning} disabled={loading || !recordForm.user_id || !recordForm.amount || !recordForm.date}
+                className="btn-primary w-full py-3">
+                {loading ? (editingEntry ? 'Updating…' : 'Recording…') : (editingEntry ? 'Update Earnings' : 'Record Earnings')}
+              </button>
+            </div>
+          </div>
+
+          {/* Recent entries — click Edit to adjust amount/notes on any past entry */}
+          <div className="card overflow-x-auto max-w-3xl">
+            <div className="p-4 border-b border-gray-100"><h2 className="section-title">Recent Entries</h2></div>
+            {recentEntries.length === 0 ? (
+              <p className="text-sm text-gray-400 text-center py-8">No earnings recorded yet</p>
+            ) : (
+              <table className="w-full text-sm">
+                <thead className="border-b border-gray-100"><tr>
+                  <th className="table-th">Person</th>
+                  <th className="table-th">Week</th>
+                  <th className="table-th">Amount</th>
+                  <th className="table-th"></th>
+                </tr></thead>
+                <tbody>
+                  {recentEntries.map((e: any) => (
+                    <tr key={e.id ?? `${e.user_id}-${e.week_start}`} className="table-row">
+                      <td className="table-td font-medium">{e.profiles?.full_name ?? '—'}</td>
+                      <td className="table-td text-gray-400">{format(parseISO(e.week_start), 'MMM d')} – {format(parseISO(e.week_end ?? e.week_start), 'MMM d, yyyy')}</td>
+                      <td className="table-td font-bold text-green-700">{formatCurrency(Number(e.amount_usd))}</td>
+                      <td className="table-td text-right">
+                        <button onClick={() => startEdit(e)} className="text-xs font-semibold text-brand-600 hover:text-brand-700">Edit</button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             )}
-
-            <button onClick={recordEarning} disabled={loading || !recordForm.user_id || !recordForm.amount || !recordForm.date}
-              className="btn-primary w-full py-3">
-              {loading ? 'Recording…' : 'Record Earnings'}
-            </button>
           </div>
         </div>
       )}
