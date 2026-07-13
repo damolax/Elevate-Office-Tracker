@@ -8,6 +8,7 @@ import type { Profile } from '@/lib/types'
 import { getStatusLabel, isSmOrAbove } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
+import ActivityFeed from '@/components/layout/ActivityFeed'
 
 const PAGE_TITLES: Record<string, string> = {
   '/dashboard': 'Dashboard',
@@ -66,6 +67,7 @@ export default function Header({ profile }: { profile: Profile }) {
         <h1 className="text-lg font-bold text-gray-900">{title}</h1>
 
         <div className="flex items-center gap-2">
+          <ActivityFeed />
           <div
             className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold cursor-pointer"
             style={{ backgroundColor: profile.color_groups?.hex_color ?? '#4f46e5' }}

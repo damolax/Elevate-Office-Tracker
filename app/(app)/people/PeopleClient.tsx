@@ -128,6 +128,11 @@ export default function PeopleClient({
         type: 'success',
         link: '/dashboard',
       })
+      // Let everyone know a new person just joined
+      await supabase.from('activity_events').insert({
+        type: 'new_member', actor_id: p.id,
+        message: `${p.full_name} just joined the team!`,
+      })
       setTimeout(() => window.location.reload(), 1500)
     }
     setConfirmAction(null)

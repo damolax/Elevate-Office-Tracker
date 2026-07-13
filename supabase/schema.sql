@@ -692,3 +692,65 @@ for each row execute function auto_create_sm_color_group();
 -- who granted it.
 -- =============================================
 alter table profiles add column if not exists co_admin_assigned_by uuid references profiles(id);
+
+-- =============================================
+-- NOTIFICATIONS (was referenced in app code but never defined here —
+-- documenting it properly now, alongside reviving the notification bell).
+-- =============================================
+create table if not exists notifications (
+  id uuid primary key default uuid_generate_v4(),
+  user_id uuid not null references profiles(id) on delete cascade,
+  title text not null,
+  body text not null default '',
+  type text not null default 'info', -- 'info' | 'success' | 'warning'
+  link text,
+  read boolean not null default false,
+  created_at timestamptz not null default now()
+);
+
+alter table notifications enable row level security;
+
+drop policy if exists "Users view own notifications" on notifications;
+create policy "Users view own notifications" on notifications
+  for select using (user_id = auth.uid());
+
+drop policy if exists "Users update own notifications" on notifications;
+create policy "Users update own notifications" on notifications
+  for update using (user_id = auth.uid());
+
+-- Any authenticated user can create a notification FOR someone else (e.g. a
+-- teammate signing in triggers a notification insert targeting other users).
+-- This mirrors how the app already inserts notifications from client code.
+drop policy if exists "Authenticated users can create notifications" on notifications;
+create policy "Authenticated users can create notifications" on notifications
+  for insert with check (auth.uid() is not null);
+
+create index if not exists notifications_user_id_created_at_idx
+  on notifications (user_id, created_at desc);
+
+-- =============================================
+-- ACTIVITY FEED — a global, shared feed everyone can see (distinct from the
+-- per-user `notifications` table above). Powers the "someone signed in",
+-- "earnings recorded", "new community post", "X just joined the team" feed.
+-- =============================================
+create table if not exists activity_events (
+  id uuid primary key default uuid_generate_v4(),
+  type text not null, -- 'sign_in' | 'sign_out' | 'earning' | 'community_post' | 'new_member'
+  message text not null,
+  actor_id uuid references profiles(id) on delete set null,
+  created_at timestamptz not null default now()
+);
+
+alter table activity_events enable row level security;
+
+drop policy if exists "Anyone approved can view activity" on activity_events;
+create policy "Anyone approved can view activity" on activity_events
+  for select using (
+    exists (select 1 from profiles where id = auth.uid() and approved = true)
+  );
+
+drop policy if exists "Authenticated users can post activity" on activity_events;
+create policy "Authenticated users can post activity" on activity_events
+  for insert with check (auth.uid() is not null);
+
+create index if not exists activity_events_created_at_idx on activity_events (created_at desc);

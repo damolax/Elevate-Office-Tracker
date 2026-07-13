@@ -118,6 +118,10 @@ export default function CommunityClient({
     } else if (data) {
       // Replace optimistic post with real data
       setPosts(prev => prev.map(p => p.id === tempId ? data as CommunityPost : p))
+      supabase.from('activity_events').insert({
+        type: 'community_post', actor_id: profile.id,
+        message: `${profile.full_name} posted in Community`,
+      })
     }
 
     setPosting(false)

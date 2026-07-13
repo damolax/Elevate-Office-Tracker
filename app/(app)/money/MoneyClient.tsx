@@ -127,6 +127,13 @@ export default function MoneyClient({
     if (error) setMsg({ type: 'error', text: error.message })
     else {
       setMsg({ type: 'success', text: `${editingEntry ? 'Earnings updated' : 'Earnings recorded'} for ${format(weekStart, 'MMM d')} – ${format(weekEnd, 'MMM d, yyyy')}` })
+      if (!editingEntry) {
+        const person = allProfiles.find((p: any) => p.id === recordForm.user_id)
+        supabase.from('activity_events').insert({
+          type: 'earning', actor_id: recordForm.user_id,
+          message: `${person?.full_name ?? 'Someone'} recorded ${formatCurrency(Number(recordForm.amount))} in earnings`,
+        })
+      }
       setRecordForm(p => ({ ...p, amount: '', notes: '' }))
       setEditingEntry(null)
       setTimeout(() => window.location.reload(), 1200)

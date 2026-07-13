@@ -67,6 +67,9 @@ export default function QRScanner({
         setMsg({ type: 'success', text: `✓ ${user.full_name} (${user.member_id}) signed IN at ${format(now, 'h:mm a')}` })
         setScannedId('')
         setNote('')
+        supabase.from('activity_events').insert({
+          type: 'sign_in', actor_id: user.id, message: `${user.full_name} signed in at ${format(now, 'h:mm a')}`,
+        })
       }
     } else {
       if (!isSignOutAllowed(now)) {
@@ -84,6 +87,9 @@ export default function QRScanner({
         setMsg({ type: 'success', text: `✓ ${user.full_name} (${user.member_id}) signed OUT at ${format(now, 'h:mm a')}` })
         setScannedId('')
         setNote('')
+        supabase.from('activity_events').insert({
+          type: 'sign_out', actor_id: user.id, message: `${user.full_name} signed out at ${format(now, 'h:mm a')}`,
+        })
       }
     }
     setLoading(false)
