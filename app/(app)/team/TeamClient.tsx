@@ -62,11 +62,15 @@ export default function TeamClient({
     })
   }
 
+  const teamIdSet = new Set(myTeam.map(p => p.id))
+
   function renderTree(parentId: string, depth = 0): React.ReactNode {
-    const children = allProfiles.filter(p => p.sponsor_id === parentId)
+    const children = allProfiles.filter(p =>
+      p.sponsor_id === parentId && teamIdSet.has(p.id) && p.activity_status === 'active'
+    )
     if (!children.length) return null
     return children.map(p => {
-      const hasChildren = allProfiles.some(c => c.sponsor_id === p.id)
+      const hasChildren = allProfiles.some(c => c.sponsor_id === p.id && teamIdSet.has(c.id) && c.activity_status === 'active')
       const expanded = expandedTree.has(p.id)
       const cg = (p as any).color_groups
       return (
@@ -93,6 +97,8 @@ export default function TeamClient({
   }
 
   const displayList = filtered(myTeam)
+  const inactiveTeamMembers = myTeam.filter(p => p.activity_status !== 'active')
+  const [showTree, setShowTree] = useState(true)
 
   return (
     <div className="max-w-6xl mx-auto space-y-5">
@@ -115,42 +121,73 @@ export default function TeamClient({
               <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
               <input className="input pl-8" placeholder="Search name or ID…" value={search} onChange={e => setSearch(e.target.value)} />
             </div>
-            <select className="input w-auto" value={activityFilter} onChange={e => setActivityFilter(e.target.value)}>
-              <option value="all">All</option>
-              <option value="active">Active</option>
-              <option value="inactive">Inactive</option>
-              <option value="suspended">Suspended</option>
-            </select>
+            <div className="flex rounded-lg border border-gray-200 overflow-hidden">
+              <button onClick={() => setShowTree(true)} className={`px-3 py-1.5 text-xs font-semibold ${showTree ? 'bg-indigo-600 text-white' : 'bg-white text-gray-500'}`}>Tree</button>
+              <button onClick={() => setShowTree(false)} className={`px-3 py-1.5 text-xs font-semibold ${!showTree ? 'bg-indigo-600 text-white' : 'bg-white text-gray-500'}`}>List</button>
+            </div>
           </div>
 
-          <div className="card divide-y divide-gray-50">
-            {displayList.length === 0 ? (
-              <p className="text-sm text-gray-400 text-center py-8">No team members found</p>
-            ) : displayList.map(p => {
-              const cg = (p as any).color_groups
-              const isSelected = selectedMember?.id === p.id
-              return (
-                <button key={p.id} type="button"
-                  className={`w-full flex items-center gap-3 p-3 text-left hover:bg-gray-50 transition-colors ${isSelected ? 'bg-indigo-50' : ''}`}
-                  onClick={() => viewMemberAttendance(p)}>
-                  <div className="w-9 h-9 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0"
-                    style={{ backgroundColor: cg?.hex_color ?? '#6366f1' }}>
-                    {p.full_name.charAt(0)}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="font-semibold text-sm text-gray-900 truncate">{p.full_name}</div>
-                    <div className="text-xs text-gray-400">{p.member_id ?? 'No ID'} · {cg?.name ?? '—'}</div>
-                  </div>
-                  <div className="text-right flex-shrink-0">
-                    <span className={`badge text-xs ${getStatusColor(p.status)}`}>{getStatusLabel(p.status)}</span>
-                    <div className={`text-xs mt-0.5 ${p.activity_status === 'active' ? 'text-green-500' : 'text-gray-400'}`}>
-                      {p.activity_status}
+          {showTree ? (
+            <div className="card p-3">
+              <p className="text-xs text-gray-400 px-2 pb-2">Active members in your team, organized by who sponsored whom. Click a name to see their recent attendance; use the arrows to expand.</p>
+              {renderTree(profile.id) ?? <p className="text-sm text-gray-400 text-center py-8">No active team members yet.</p>}
+            </div>
+          ) : (
+            <div className="card divide-y divide-gray-50">
+              {displayList.length === 0 ? (
+                <p className="text-sm text-gray-400 text-center py-8">No team members found</p>
+              ) : displayList.map(p => {
+                const cg = (p as any).color_groups
+                const isSelected = selectedMember?.id === p.id
+                return (
+                  <button key={p.id} type="button"
+                    className={`w-full flex items-center gap-3 p-3 text-left hover:bg-gray-50 transition-colors ${isSelected ? 'bg-indigo-50' : ''}`}
+                    onClick={() => viewMemberAttendance(p)}>
+                    <div className="w-9 h-9 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0"
+                      style={{ backgroundColor: cg?.hex_color ?? '#6366f1' }}>
+                      {p.full_name.charAt(0)}
                     </div>
-                  </div>
-                </button>
-              )
-            })}
-          </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-semibold text-sm text-gray-900 truncate">{p.full_name}</div>
+                      <div className="text-xs text-gray-400">{p.member_id ?? 'No ID'} · {cg?.name ?? '—'}</div>
+                    </div>
+                    <div className="text-right flex-shrink-0">
+                      <span className={`badge text-xs ${getStatusColor(p.status)}`}>{getStatusLabel(p.status)}</span>
+                      <div className={`text-xs mt-0.5 ${p.activity_status === 'active' ? 'text-green-500' : 'text-gray-400'}`}>
+                        {p.activity_status}
+                      </div>
+                    </div>
+                  </button>
+                )
+              })}
+            </div>
+          )}
+
+          {/* Inactive members — separate table, not part of the tree */}
+          {inactiveTeamMembers.length > 0 && (
+            <div className="card">
+              <div className="px-4 py-3 border-b border-gray-100 text-sm font-semibold text-gray-700">
+                Inactive Members ({inactiveTeamMembers.length})
+              </div>
+              <div className="divide-y divide-gray-50">
+                {inactiveTeamMembers.map(p => (
+                  <button key={p.id} type="button"
+                    className="w-full flex items-center gap-3 p-3 text-left hover:bg-gray-50 transition-colors"
+                    onClick={() => viewMemberAttendance(p)}>
+                    <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0 opacity-60"
+                      style={{ backgroundColor: (p as any).color_groups?.hex_color ?? '#6366f1' }}>
+                      {p.full_name.charAt(0)}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium text-sm text-gray-600 truncate">{p.full_name}</div>
+                      <div className="text-xs text-gray-400">{p.member_id ?? 'No ID'}</div>
+                    </div>
+                    <span className="badge text-xs bg-gray-100 text-gray-500">{p.activity_status}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Member detail + attendance */}
