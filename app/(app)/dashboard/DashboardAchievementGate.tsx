@@ -29,7 +29,8 @@ const CATEGORY_META: Record<string, { label: string; emoji: string }> = {
 
 function previousMonthStr() {
   const now = new Date()
-  return `${now.getFullYear()}-${String(now.getMonth()).padStart(2, '0')}`
+  const previous = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+  return `${previous.getFullYear()}-${String(previous.getMonth() + 1).padStart(2, '0')}`
 }
 
 function monthLabel(monthStr: string) {
@@ -37,6 +38,15 @@ function monthLabel(monthStr: string) {
   if (!year || !month) return monthStr
   return new Intl.DateTimeFormat('en', { month: 'long', year: 'numeric' })
     .format(new Date(year, month - 1, 1))
+}
+
+function ordinal(value: number) {
+  const mod100 = value % 100
+  if (mod100 >= 11 && mod100 <= 13) return `${value}th`
+  if (value % 10 === 1) return `${value}st`
+  if (value % 10 === 2) return `${value}nd`
+  if (value % 10 === 3) return `${value}rd`
+  return `${value}th`
 }
 
 function valueLabel(category: string, value: number | null) {
@@ -83,13 +93,10 @@ export default function DashboardAchievementGate() {
 
       const completedMonth = previousMonthStr()
 
-      // Idempotent server-side finalization. Once a month is finalized, later edits or
-      // live leaderboard changes cannot take the title away from the recorded winner.
       const { error: finalizeError } = await supabase.rpc('finalize_monthly_achievements', {
         p_month_str: completedMonth,
       })
       if (finalizeError) {
-        // Keep the dashboard usable while the database migration is being deployed.
         console.warn('Monthly achievement finalization is not available yet:', finalizeError.message)
       }
 
@@ -114,8 +121,6 @@ export default function DashboardAchievementGate() {
       }
       setCounts(runningCounts)
 
-      // Only the newly completed month celebrates. Older finalized titles remain in
-      // the permanent counters, but they do not all replay when this feature is introduced.
       const justWon = typedAwards.filter(award => award.month_str === completedMonth)
       const items: AchievementCelebrationItem[] = justWon.map(award => {
         const meta = CATEGORY_META[award.category] ?? { label: award.category, emoji: '🏆' }
@@ -124,7 +129,7 @@ export default function DashboardAchievementGate() {
         return {
           key: `monthly:${award.category}:${award.month_str}`,
           title: `${meta.label} · ${winNumber}×`,
-          detail: `Final ${monthLabel(award.month_str)} winner${metric ? ` · ${metric}` : ''}. This is your ${winNumber}${winNumber === 1 ? 'st' : winNumber === 2 ? 'nd' : winNumber === 3 ? 'rd' : 'th'} ${meta.label} title.`,
+          detail: `Final ${monthLabel(award.month_str)} winner${metric ? ` · ${metric}` : ''}. This is your ${ordinal(winNumber)} ${meta.label} title.`,
           emoji: meta.emoji,
         }
       })
