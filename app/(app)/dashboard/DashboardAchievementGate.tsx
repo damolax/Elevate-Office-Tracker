@@ -1,169 +1,186 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { useSearchParams } from 'next/navigation'
+import { Trophy } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import AchievementCelebration, { type AchievementCelebrationItem } from '@/components/AchievementCelebration'
 
 type Viewer = {
   id: string
   full_name: string
-  member_id: string | null
   profile_picture: string | null
   group_color: string | null
 }
 
-const LEADERBOARDS = [
-  { title: 'Top Scouts Today', id: 'top-scouts', label: 'Top Scout Today', emoji: '🎯', scope: 'day' },
-  { title: 'Top 20 Earners', id: 'top-earner', label: 'Top Earner', emoji: '💰', scope: 'range' },
-  { title: 'Top 20 Most Consistent Earners', id: 'consistent-earner', label: 'Most Consistent Earner', emoji: '⭐', scope: 'range' },
-  { title: 'Top 20 Punctuality', id: 'punctuality', label: 'Punctuality Champion', emoji: '⏰', scope: 'range' },
-  { title: 'Most Consistent Attendance', id: 'attendance', label: 'Attendance Champion', emoji: '📅', scope: 'range' },
-] as const
+type MonthlyAward = {
+  month_str: string
+  category: string
+  value: number | null
+  detail: string | null
+}
 
-function localDateKey() {
+const CATEGORY_META: Record<string, { label: string; emoji: string }> = {
+  top_earner: { label: 'Top Earner', emoji: '💰' },
+  top_scout: { label: 'Top Scout', emoji: '🎯' },
+  consistent_earner: { label: 'Consistency Champion', emoji: '⭐' },
+  punctuality: { label: 'Punctuality Champion', emoji: '⏰' },
+  attendance: { label: 'Attendance Champion', emoji: '📅' },
+}
+
+function previousMonthStr() {
   const now = new Date()
-  const y = now.getFullYear()
-  const m = String(now.getMonth() + 1).padStart(2, '0')
-  const d = String(now.getDate()).padStart(2, '0')
-  return `${y}-${m}-${d}`
+  return `${now.getFullYear()}-${String(now.getMonth()).padStart(2, '0')}`
 }
 
-function rangePeriodKey(range: string) {
-  const now = new Date()
-  const y = now.getFullYear()
-  const m = String(now.getMonth() + 1).padStart(2, '0')
-  const weekStart = new Date(now)
-  const day = (now.getDay() + 6) % 7
-  weekStart.setDate(now.getDate() - day)
-  const wy = weekStart.getFullYear()
-  const wm = String(weekStart.getMonth() + 1).padStart(2, '0')
-  const wd = String(weekStart.getDate()).padStart(2, '0')
-
-  if (range === 'this_week') return `week-${wy}-${wm}-${wd}`
-  if (range === 'this_month') return `month-${y}-${m}`
-  return `${range}-${localDateKey()}`
+function monthLabel(monthStr: string) {
+  const [year, month] = monthStr.split('-').map(Number)
+  if (!year || !month) return monthStr
+  return new Intl.DateTimeFormat('en', { month: 'long', year: 'numeric' })
+    .format(new Date(year, month - 1, 1))
 }
 
-function normalize(value: string) {
-  return value.replace(/\s+/g, ' ').trim().toLowerCase()
-}
-
-function findCardByHeading(titlePart: string): HTMLElement | null {
-  const headings = Array.from(document.querySelectorAll('h1,h2,h3')) as HTMLElement[]
-  const heading = headings.find(node => normalize(node.textContent ?? '').includes(normalize(titlePart)))
-  return heading?.closest('.card') as HTMLElement | null
-}
-
-function firstLeaderboardEntry(card: HTMLElement): HTMLElement | null {
-  const tableRow = card.querySelector('tbody tr') as HTMLElement | null
-  if (tableRow) return tableRow
-
-  // The Top Scouts card is a compact stacked list rather than a table.
-  const list = card.querySelector('.space-y-3')
-  if (list?.firstElementChild) return list.firstElementChild as HTMLElement
-
-  return null
-}
-
-function isViewer(entry: HTMLElement, viewer: Viewer) {
-  const text = normalize(entry.textContent ?? '')
-  if (text.includes('(you)')) return true
-  if (viewer.member_id && text.includes(normalize(viewer.member_id))) return true
-  if (viewer.full_name && text.includes(normalize(viewer.full_name))) return true
-  return false
-}
-
-function entryDetail(entry: HTMLElement, fallback: string) {
-  const text = (entry.textContent ?? '').replace(/\s+/g, ' ').trim()
-  if (!text) return fallback
-  return text.replace(/\(You\)/gi, '').trim().slice(0, 130)
+function valueLabel(category: string, value: number | null) {
+  if (value == null) return ''
+  if (category === 'top_earner') {
+    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(value)
+  }
+  if (category === 'top_scout') return `${Math.round(value)} businesses contacted`
+  if (category === 'consistent_earner') return `${Math.round(value)} consistency points`
+  if (category === 'punctuality') return `${Math.round(value)} min average ahead of the sign-in window`
+  if (category === 'attendance') return `${Math.round(value)} days present`
+  return String(value)
 }
 
 export default function DashboardAchievementGate() {
   const supabase = useMemo(() => createClient(), [])
-  const searchParams = useSearchParams()
-  const range = searchParams.get('range') ?? 'this_month'
   const [viewer, setViewer] = useState<Viewer | null>(null)
-  const [achievements, setAchievements] = useState<AchievementCelebrationItem[]>([])
+  const [celebrations, setCelebrations] = useState<AchievementCelebrationItem[]>([])
+  const [counts, setCounts] = useState<Record<string, number>>({})
 
   useEffect(() => {
     let cancelled = false
 
-    async function loadViewer() {
+    async function loadFinalizedAchievements() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user || cancelled) return
 
-      const { data } = await supabase
+      const { data: profile } = await supabase
         .from('profiles')
-        .select('id, full_name, member_id, profile_picture, color_groups!profiles_color_group_id_fkey(hex_color)')
+        .select('id, full_name, profile_picture, color_groups!profiles_color_group_id_fkey(hex_color)')
         .eq('id', user.id)
         .single()
 
-      if (!data || cancelled) return
-      const group = (data as any).color_groups
-      setViewer({
-        id: data.id,
-        full_name: data.full_name,
-        member_id: data.member_id,
-        profile_picture: data.profile_picture,
+      if (!profile || cancelled) return
+
+      const group = (profile as any).color_groups
+      const currentViewer: Viewer = {
+        id: profile.id,
+        full_name: profile.full_name,
+        profile_picture: profile.profile_picture,
         group_color: group?.hex_color ?? null,
+      }
+      setViewer(currentViewer)
+
+      const completedMonth = previousMonthStr()
+
+      // Idempotent server-side finalization. Once a month is finalized, later edits or
+      // live leaderboard changes cannot take the title away from the recorded winner.
+      const { error: finalizeError } = await supabase.rpc('finalize_monthly_achievements', {
+        p_month_str: completedMonth,
       })
+      if (finalizeError) {
+        // Keep the dashboard usable while the database migration is being deployed.
+        console.warn('Monthly achievement finalization is not available yet:', finalizeError.message)
+      }
+
+      const { data: awards, error: awardsError } = await supabase
+        .from('monthly_achievements')
+        .select('month_str, category, value, detail')
+        .eq('user_id', user.id)
+        .order('month_str', { ascending: true })
+
+      if (awardsError || cancelled) {
+        if (awardsError) console.warn('Could not load monthly achievements:', awardsError.message)
+        return
+      }
+
+      const typedAwards = (awards ?? []) as MonthlyAward[]
+      const runningCounts: Record<string, number> = {}
+      const winNumberByKey = new Map<string, number>()
+
+      for (const award of typedAwards) {
+        runningCounts[award.category] = (runningCounts[award.category] ?? 0) + 1
+        winNumberByKey.set(`${award.category}:${award.month_str}`, runningCounts[award.category])
+      }
+      setCounts(runningCounts)
+
+      // Only the newly completed month celebrates. Older finalized titles remain in
+      // the permanent counters, but they do not all replay when this feature is introduced.
+      const justWon = typedAwards.filter(award => award.month_str === completedMonth)
+      const items: AchievementCelebrationItem[] = justWon.map(award => {
+        const meta = CATEGORY_META[award.category] ?? { label: award.category, emoji: '🏆' }
+        const winNumber = winNumberByKey.get(`${award.category}:${award.month_str}`) ?? 1
+        const metric = valueLabel(award.category, award.value)
+        return {
+          key: `monthly:${award.category}:${award.month_str}`,
+          title: `${meta.label} · ${winNumber}×`,
+          detail: `Final ${monthLabel(award.month_str)} winner${metric ? ` · ${metric}` : ''}. This is your ${winNumber}${winNumber === 1 ? 'st' : winNumber === 2 ? 'nd' : winNumber === 3 ? 'rd' : 'th'} ${meta.label} title.`,
+          emoji: meta.emoji,
+        }
+      })
+
+      setCelebrations(items)
     }
 
-    loadViewer()
+    loadFinalizedAchievements()
     return () => { cancelled = true }
   }, [supabase])
 
-  useEffect(() => {
-    if (!viewer) return
+  const countEntries = Object.entries(counts)
+    .filter(([category, count]) => count > 0 && CATEGORY_META[category])
+    .sort((a, b) => b[1] - a[1])
 
-    let timer: ReturnType<typeof setTimeout> | null = null
-    let attempts = 0
-
-    const inspect = () => {
-      attempts += 1
-      const found: AchievementCelebrationItem[] = []
-      let cardsFound = 0
-
-      for (const board of LEADERBOARDS) {
-        const card = findCardByHeading(board.title)
-        if (!card) continue
-        cardsFound += 1
-
-        const first = firstLeaderboardEntry(card)
-        if (!first || !isViewer(first, viewer)) continue
-
-        const period = board.scope === 'day' ? localDateKey() : rangePeriodKey(range)
-        found.push({
-          key: `${board.id}:${period}`,
-          title: board.label,
-          detail: entryDetail(first, `You are currently #1 in ${board.label.toLowerCase()}.`),
-          emoji: board.emoji,
-        })
-      }
-
-      setAchievements(found)
-
-      // Dashboard data is server-rendered, but allow a few retries for transitions/navigation.
-      if (cardsFound < LEADERBOARDS.length && attempts < 8) {
-        timer = setTimeout(inspect, 250)
-      }
-    }
-
-    timer = setTimeout(inspect, 80)
-    return () => { if (timer) clearTimeout(timer) }
-  }, [viewer, range])
-
-  if (!viewer || !achievements.length) return null
+  if (!viewer) return null
 
   return (
-    <AchievementCelebration
-      profileId={viewer.id}
-      fullName={viewer.full_name}
-      profilePicture={viewer.profile_picture}
-      groupColor={viewer.group_color}
-      achievements={achievements}
-    />
+    <>
+      {countEntries.length > 0 && (
+        <div className="max-w-7xl mx-auto mt-6">
+          <div className="card px-5 py-4">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="w-9 h-9 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
+                <Trophy size={18} />
+              </div>
+              <div>
+                <h2 className="text-sm font-bold text-gray-900">My Monthly Achievements</h2>
+                <p className="text-xs text-gray-400">Only month-end #1 finishes count as permanent titles.</p>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {countEntries.map(([category, count]) => {
+                const meta = CATEGORY_META[category]
+                return (
+                  <div key={category} className="inline-flex items-center gap-2 rounded-full border border-gray-200 bg-gray-50 px-3 py-1.5 text-sm">
+                    <span aria-hidden="true">{meta.emoji}</span>
+                    <span className="font-semibold text-gray-700">{meta.label}</span>
+                    <span className="font-extrabold text-brand-600">{count}×</span>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {celebrations.length > 0 && (
+        <AchievementCelebration
+          profileId={viewer.id}
+          fullName={viewer.full_name}
+          profilePicture={viewer.profile_picture}
+          groupColor={viewer.group_color}
+          achievements={celebrations}
+        />
+      )}
+    </>
   )
 }
