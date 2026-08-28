@@ -154,7 +154,7 @@ export default function AchievementCelebration({
           </div>
 
           <div className="mt-5 inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-3 py-1 text-xs font-bold uppercase tracking-wider text-amber-700">
-            <Star size={13} fill="currentColor" /> Achievement unlocked
+            <Star size={13} fill="currentColor" /> Month-end achievement
           </div>
 
           <h2 id="achievement-title" className="mt-3 text-2xl sm:text-3xl font-extrabold text-gray-900">
@@ -162,8 +162,8 @@ export default function AchievementCelebration({
           </h2>
           <p className="mt-2 text-sm text-gray-500">
             {multiple
-              ? `You are currently #1 in ${visible.length} areas on the Elevate Office leaderboard.`
-              : 'You are currently #1 on the Elevate Office leaderboard.'}
+              ? `You finished the month as the final #1 in ${visible.length} achievement categories.`
+              : 'You finished the month as the final #1 in an achievement category.'}
           </p>
 
           <div className="mt-6 space-y-2 text-left">
@@ -178,7 +178,7 @@ export default function AchievementCelebration({
             ))}
           </div>
 
-          <p className="mt-5 text-sm font-semibold text-gray-700">Keep setting the pace. The office sees you. 🏆</p>
+          <p className="mt-5 text-sm font-semibold text-gray-700">The title is now part of your permanent Elevate achievement record. 🏆</p>
 
           <button
             type="button"
