@@ -1,6 +1,8 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
+const SESSION_LOOKUP_TIMEOUT_MS = 1500
+
 export async function middleware(request: NextRequest) {
   const path = request.nextUrl.pathname
 
@@ -15,8 +17,7 @@ export async function middleware(request: NextRequest) {
     path.startsWith('/api/')
 
   // Public routes must never wait on an external authentication request.
-  // This keeps the landing/login/scanner/API paths available even if Supabase
-  // is temporarily slow or unavailable.
+  // This keeps landing/scanner/API paths available even if Supabase is slow.
   if (isPublic && path !== '/login' && path !== '/signup') {
     return NextResponse.next()
   }
@@ -45,18 +46,29 @@ export async function middleware(request: NextRequest) {
     }
   )
 
-  // Middleware only needs enough information to route the request. getSession()
-  // reads the locally available auth state and avoids the remote Auth request made
-  // by getUser(), which can exceed Vercel's middleware execution window.
-  // Protected server pages still call getUser() and remain the authority for access.
-  const { data: { session } } = await supabase.auth.getSession()
-  const hasSession = Boolean(session)
+  // This middleware is a routing convenience, not the authorization boundary.
+  // AppLayout validates protected requests with auth.getUser() on the server.
+  // getSession() is normally cookie-local, but an expired session can trigger a
+  // refresh. Bound the check so a slow Supabase dependency can never consume
+  // Vercel's middleware execution window. On timeout we fail open to AppLayout,
+  // which still denies unauthenticated access authoritatively.
+  let hasSession: boolean | null = null
+  try {
+    const result = await Promise.race([
+      supabase.auth.getSession().then(({ data }) => Boolean(data.session)),
+      new Promise<null>(resolve => setTimeout(() => resolve(null), SESSION_LOOKUP_TIMEOUT_MS)),
+    ])
+    hasSession = result
+  } catch (error) {
+    console.warn('Middleware session lookup failed; deferring auth to AppLayout', error)
+    hasSession = null
+  }
 
-  if (!hasSession && !isPublic) {
+  if (hasSession === false && !isPublic) {
     return NextResponse.redirect(new URL('/login', request.url))
   }
 
-  if (hasSession && (path === '/login' || path === '/signup')) {
+  if (hasSession === true && (path === '/login' || path === '/signup')) {
     return NextResponse.redirect(new URL('/dashboard', request.url))
   }
 
